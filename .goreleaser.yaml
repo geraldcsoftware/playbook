@@ -1,0 +1,36 @@
+version: 2
+
+project_name: playbook
+
+builds:
+  - main: ./cmd/playbook
+    binary: playbook
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Os }}_{{ .Arch }}"
+
+brews:
+  - repository:
+      owner: geraldcsoftware
+      name: homebrew-tap
+    name: playbook
+    homepage: "https://github.com/geraldcsoftware/playbook"
+    description: "CLI tool for running Ansible playbooks"
+    install: |
+      bin.install "playbook"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"

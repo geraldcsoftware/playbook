@@ -1,0 +1,17 @@
+# Binaries
+/playbook
+dist/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+
+# Original script (local only, never commit)
+run-playbook.sh
+
+# Local design docs
+docs/
