@@ -34,6 +34,8 @@ func newRootCmd() *cobra.Command {
 	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "increase output detail")
 	cmd.PersistentFlags().BoolVar(&noPreflight, "no-preflight", false, "skip SSH reachability checks")
 
+	cmd.AddCommand(newDoctorCmd())
+
 	return cmd
 }
 
