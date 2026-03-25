@@ -2,7 +2,12 @@ package cli
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/geraldcsoftware/playbook/internal/config"
+	"github.com/geraldcsoftware/playbook/internal/tui"
+	"github.com/geraldcsoftware/playbook/pkg/playbook"
+	"github.com/geraldcsoftware/playbook/pkg/ssh"
 	"github.com/spf13/cobra"
 )
 
@@ -22,8 +27,48 @@ func newRootCmd() *cobra.Command {
 			if len(args) == 0 {
 				return cmd.Help()
 			}
-			// args[0] is a playbook file — launch TUI (implemented in a later task)
-			fmt.Printf("TUI not yet implemented. Use 'playbook run %s' instead.\n", args[0])
+
+			cfg, _ := config.Load(configFilePath())
+
+			pb, err := playbook.Parse(args[0])
+			if err != nil {
+				return err
+			}
+
+			sshHosts, err := ssh.ParseConfig(sshConfigPath())
+			if err != nil {
+				return fmt.Errorf("parsing SSH config: %w", err)
+			}
+
+			var resolved []ssh.ResolvedHost
+			var resolveErrors []string
+			for _, hostAlias := range pb.Hosts {
+				r, err := ssh.Resolve(hostAlias, sshHosts, cfg.DefaultUser)
+				if err != nil {
+					resolveErrors = append(resolveErrors, fmt.Sprintf("%s: %v", hostAlias, err))
+					continue
+				}
+				resolved = append(resolved, r...)
+			}
+
+			action, err := tui.Run(pb, resolved, resolveErrors)
+			if err != nil {
+				return err
+			}
+
+			switch action {
+			case tui.ActionRun:
+				return runPlaybook(args[0], nil, 30*time.Second)
+			case tui.ActionDoctor:
+				return runDoctor()
+			case tui.ActionViewHosts:
+				for _, r := range resolved {
+					fmt.Printf("  %s -> %s (user: %s, key: %s, port: %d)\n",
+						r.Alias, r.Hostname, r.User, r.IdentityFile, r.Port)
+				}
+			case tui.ActionQuit:
+				// nothing
+			}
 			return nil
 		},
 		SilenceErrors: true,
