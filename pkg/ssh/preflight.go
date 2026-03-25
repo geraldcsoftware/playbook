@@ -15,7 +15,7 @@ type HostPreflightResult struct {
 }
 
 func CheckReachability(host string, port int, timeout time.Duration) error {
-	addr := fmt.Sprintf("%s:%d", host, port)
+	addr := net.JoinHostPort(host, fmt.Sprintf("%d", port))
 	conn, err := net.DialTimeout("tcp", addr, timeout)
 	if err != nil {
 		return fmt.Errorf("SSH port %d not reachable on %s: %w", port, host, err)
