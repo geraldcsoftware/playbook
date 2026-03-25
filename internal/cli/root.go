@@ -36,6 +36,7 @@ func newRootCmd() *cobra.Command {
 
 	cmd.AddCommand(newDoctorCmd())
 	cmd.AddCommand(newHostsCmd())
+	cmd.AddCommand(newRunCmd())
 
 	return cmd
 }
