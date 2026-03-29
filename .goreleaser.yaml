@@ -23,6 +23,7 @@ brews:
       owner: geraldcsoftware
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+      directory: Formula
     name: playbook
     homepage: "https://github.com/geraldcsoftware/playbook"
     description: "CLI tool for running Ansible playbooks"
