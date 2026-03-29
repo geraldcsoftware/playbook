@@ -72,6 +72,23 @@ func CheckFile(path string, label string) Check {
 	}
 }
 
+// CheckProcessRunning verifies that a process with the given name is running.
+func CheckProcessRunning(name string, label string) Check {
+	out, err := exec.Command("pgrep", "-f", name).Output()
+	if err != nil || strings.TrimSpace(string(out)) == "" {
+		return Check{
+			Name: label,
+			OK:   false,
+			Hint: fmt.Sprintf("Start it with: %s", name),
+		}
+	}
+	return Check{
+		Name:   label,
+		OK:     true,
+		Detail: "running",
+	}
+}
+
 func getVersion(path string, name string) string {
 	for _, flag := range []string{"--version", "version"} {
 		out, err := exec.Command(path, flag).CombinedOutput()

@@ -37,6 +37,18 @@ func TestAACProvider_Wrap_BuildsCorrectCommand(t *testing.T) {
 		t.Errorf("expected --id test-item-id in args: %v", args)
 	}
 
+	// Verify --env flag with correct order: ENV_VAR=field
+	envFound := false
+	for i, a := range args {
+		if a == "--env" && i+1 < len(args) && args[i+1] == "ANSIBLE_BECOME_PASS=password" {
+			envFound = true
+			break
+		}
+	}
+	if !envFound {
+		t.Errorf("expected --env ANSIBLE_BECOME_PASS=password in args: %v", args)
+	}
+
 	separatorIdx := -1
 	for i, a := range args {
 		if a == "--" {
@@ -65,14 +77,14 @@ func TestAACProvider_Wrap_MultipleEnvMappings(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	mapCount := 0
+	envCount := 0
 	for _, a := range cmd.Args {
-		if a == "--map" {
-			mapCount++
+		if a == "--env" {
+			envCount++
 		}
 	}
-	if mapCount != 2 {
-		t.Errorf("expected 2 --map flags, got %d. Args: %v", mapCount, cmd.Args)
+	if envCount != 2 {
+		t.Errorf("expected 2 --env flags, got %d. Args: %v", envCount, cmd.Args)
 	}
 }
 

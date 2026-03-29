@@ -21,6 +21,10 @@ func (p *AACProvider) aacPath() (string, error) {
 	return exec.LookPath("aac")
 }
 
+// Wrap builds an exec.Cmd that runs `aac run` wrapping the given command.
+// envMapping maps credential field names (e.g. "password") to environment
+// variable names (e.g. "ANSIBLE_BECOME_PASS"). The aac CLI expects the
+// inverse order: --env ENV_VAR=field.
 func (p *AACProvider) Wrap(itemID string, cmdName string, args []string, envMapping map[string]string) (*exec.Cmd, error) {
 	if itemID == "" {
 		return nil, fmt.Errorf("credential item ID is empty — set $BW_EUS_ITEM_ID")
@@ -28,6 +32,7 @@ func (p *AACProvider) Wrap(itemID string, cmdName string, args []string, envMapp
 
 	aacArgs := []string{"run", "--id", itemID}
 
+	// Sort for deterministic command construction
 	keys := make([]string, 0, len(envMapping))
 	for k := range envMapping {
 		keys = append(keys, k)
@@ -36,7 +41,8 @@ func (p *AACProvider) Wrap(itemID string, cmdName string, args []string, envMapp
 
 	for _, field := range keys {
 		envVar := envMapping[field]
-		aacArgs = append(aacArgs, "--map", fmt.Sprintf("%s=%s", field, envVar))
+		// aac expects: --env ENV_VAR_NAME=credential_field
+		aacArgs = append(aacArgs, "--env", fmt.Sprintf("%s=%s", envVar, field))
 	}
 
 	aacArgs = append(aacArgs, "--")

@@ -25,6 +25,7 @@ func runDoctor() error {
 	checks := []doctor.Check{
 		withHint(doctor.CheckBinary("ansible-playbook"), "https://docs.ansible.com/ansible/latest/installation_guide/"),
 		withHint(doctor.CheckBinary("aac"), "https://github.com/bitwarden/agent-access"),
+		withHint(doctor.CheckProcessRunning("aac listen", "aac listen"), "Run 'aac listen' in a background terminal"),
 		asOptional(withHint(doctor.CheckBinary("bw"), "Required by aac — https://bitwarden.com/help/cli/")),
 		doctor.CheckBinary("ssh-keygen"),
 		withHint(doctor.CheckBinary("ssh-copy-id"), "brew install openssh"),
