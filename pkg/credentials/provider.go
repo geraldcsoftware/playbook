@@ -1,7 +1,7 @@
 package credentials
 
-import "os/exec"
-
+// Provider abstracts credential retrieval.
+// Each provider fetches a password from its backing store.
 type Provider interface {
-	Wrap(itemID string, cmdName string, args []string, envMapping map[string]string) (*exec.Cmd, error)
+	Fetch() (string, error)
 }

@@ -1,17 +1,18 @@
 package credentials
 
 import (
+	"encoding/json"
 	"fmt"
 	"os/exec"
-	"sort"
 )
 
 type AACProvider struct {
+	ItemID     string
 	BinaryPath string // override for testing; defaults to "aac" via PATH lookup if empty
 }
 
-func NewAACProvider() *AACProvider {
-	return &AACProvider{}
+func NewAACProvider(itemID string) *AACProvider {
+	return &AACProvider{ItemID: itemID}
 }
 
 func (p *AACProvider) aacPath() (string, error) {
@@ -21,39 +22,38 @@ func (p *AACProvider) aacPath() (string, error) {
 	return exec.LookPath("aac")
 }
 
-// Wrap builds an exec.Cmd that runs `aac run` wrapping the given command.
-// envMapping maps credential field names (e.g. "password") to environment
-// variable names (e.g. "ANSIBLE_BECOME_PASS"). The aac CLI expects the
-// inverse order: --env ENV_VAR=field.
-func (p *AACProvider) Wrap(itemID string, cmdName string, args []string, envMapping map[string]string) (*exec.Cmd, error) {
-	if itemID == "" {
-		return nil, fmt.Errorf("credential item ID is empty — set $BW_EUS_ITEM_ID")
+type aacResponse struct {
+	Credential struct {
+		Password string `json:"password"`
+		Username string `json:"username"`
+	} `json:"credential"`
+	Success bool `json:"success"`
+}
+
+func (p *AACProvider) Fetch() (string, error) {
+	if p.ItemID == "" {
+		return "", fmt.Errorf("credential item ID is empty — set the item ID env var or check your config")
 	}
-
-	aacArgs := []string{"run", "--id", itemID}
-
-	// Sort for deterministic command construction
-	keys := make([]string, 0, len(envMapping))
-	for k := range envMapping {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, field := range keys {
-		envVar := envMapping[field]
-		// aac expects: --env ENV_VAR_NAME=credential_field
-		aacArgs = append(aacArgs, "--env", fmt.Sprintf("%s=%s", envVar, field))
-	}
-
-	aacArgs = append(aacArgs, "--")
-	aacArgs = append(aacArgs, cmdName)
-	aacArgs = append(aacArgs, args...)
 
 	aacBin, err := p.aacPath()
 	if err != nil {
-		return nil, fmt.Errorf("aac not found on PATH: %w", err)
+		return "", fmt.Errorf("aac not found on PATH: %w", err)
 	}
 
-	cmd := exec.Command(aacBin, aacArgs...)
-	return cmd, nil
+	cmd := exec.Command(aacBin, "connect", "--id", p.ItemID, "--output", "json")
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("aac connect failed: %w", err)
+	}
+
+	var resp aacResponse
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return "", fmt.Errorf("parsing aac response: %w", err)
+	}
+
+	if resp.Credential.Password == "" {
+		return "", fmt.Errorf("aac returned empty password for item %s", p.ItemID)
+	}
+
+	return resp.Credential.Password, nil
 }
