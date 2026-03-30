@@ -15,6 +15,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	credentialProvider string
+	secretName         string
+	accessToken        string
+)
+
 func newRunCmd() *cobra.Command {
 	var timeout int
 
@@ -34,8 +40,49 @@ func newRunCmd() *cobra.Command {
 	}
 
 	cmd.Flags().IntVar(&timeout, "timeout", 30, "SSH pre-flight timeout in seconds")
+	cmd.Flags().StringVarP(&credentialProvider, "credential-provider", "p", "", "credential provider: aac or bws (overrides config)")
+	cmd.Flags().StringVarP(&secretName, "secret-name", "s", "", "BWS secret name (overrides config)")
+	cmd.Flags().StringVarP(&accessToken, "access-token", "t", "", "BWS access token (overrides config env var)")
 
 	return cmd
+}
+
+func resolveProvider(cfg config.Config) (credentials.Provider, error) {
+	providerName := cfg.CredentialProvider
+	if credentialProvider != "" {
+		providerName = credentialProvider
+	}
+
+	switch providerName {
+	case "aac":
+		itemID := os.Getenv(cfg.AAC.ItemIDEnv)
+		if itemID == "" {
+			return nil, fmt.Errorf("$%s not set — run 'playbook doctor' to diagnose", cfg.AAC.ItemIDEnv)
+		}
+		return credentials.NewAACProvider(itemID), nil
+
+	case "bws":
+		token := accessToken
+		if token == "" {
+			token = os.Getenv(cfg.BWS.AccessTokenEnv)
+		}
+		if token == "" {
+			return nil, fmt.Errorf("BWS access token not set — pass --access-token or set $%s", cfg.BWS.AccessTokenEnv)
+		}
+
+		name := secretName
+		if name == "" {
+			name = cfg.BWS.SecretName
+		}
+		if name == "" {
+			return nil, fmt.Errorf("BWS secret name not set — pass --secret-name or set bws.secret_name in config")
+		}
+
+		return credentials.NewBWSProvider(token, name), nil
+
+	default:
+		return nil, fmt.Errorf("unknown credential provider '%s' — use 'aac' or 'bws'", providerName)
+	}
 }
 
 func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration) error {
@@ -91,18 +138,19 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 		fmt.Printf("\033[32m■\033[0m  All hosts passed\n")
 	}
 
-	// Phase 4: Credential check
+	// Phase 4: Resolve credential provider
 	fmt.Println("\n\033[36m◇\033[0m  \033[1m\033[97mCredential Injection\033[0m")
 
-	itemID := os.Getenv("BW_EUS_ITEM_ID")
-	if itemID == "" {
-		return fmt.Errorf("$BW_EUS_ITEM_ID not set — run 'playbook doctor' to diagnose")
+	provider, err := resolveProvider(cfg)
+	if err != nil {
+		return err
 	}
-	maskedID := itemID
-	if len(itemID) > 8 {
-		maskedID = itemID[:4] + "..." + itemID[len(itemID)-4:]
+
+	providerName := cfg.CredentialProvider
+	if credentialProvider != "" {
+		providerName = credentialProvider
 	}
-	fmt.Printf("\033[2m\033[90m│\033[0m  Using Bitwarden item: %s\n", maskedID)
+	fmt.Printf("\033[2m\033[90m│\033[0m  Provider: %s\n", providerName)
 
 	// Phase 5: Generate inventory
 	groupName := strings.Join(pb.Hosts, "_")
@@ -112,14 +160,13 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 	}
 	defer cleanup()
 
-	// Phase 6: Run ansible-playbook via aac
+	// Phase 6: Run ansible-playbook
 	fmt.Println("\n\033[32m■\033[0m  \033[32mHanding off to ansible-playbook...\033[0m")
 	fmt.Println("\033[2m\033[90m" + "──────────────────────────────────────────────────" + "\033[0m")
 	fmt.Println()
 
 	allExtraArgs := append(cfg.Ansible.DefaultArgs, extraArgs...)
 
-	provider := credentials.NewAACProvider(itemID)
 	runner := ansible.NewRunner(provider)
 	exitCode, err := runner.Run(playbookFile, invPath, allExtraArgs)
 	if err != nil {
