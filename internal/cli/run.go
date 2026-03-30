@@ -119,9 +119,9 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 
 	allExtraArgs := append(cfg.Ansible.DefaultArgs, extraArgs...)
 
-	provider := credentials.NewAACProvider()
+	provider := credentials.NewAACProvider(itemID)
 	runner := ansible.NewRunner(provider)
-	exitCode, err := runner.Run(itemID, playbookFile, invPath, allExtraArgs)
+	exitCode, err := runner.Run(playbookFile, invPath, allExtraArgs)
 	if err != nil {
 		return err
 	}
