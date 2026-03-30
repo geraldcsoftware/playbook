@@ -20,21 +20,55 @@ func newDoctorCmd() *cobra.Command {
 }
 
 func runDoctor() error {
+	cfg, _ := config.Load(configFilePath())
+
+	providerName := cfg.CredentialProvider
+	if credentialProvider != "" {
+		providerName = credentialProvider
+	}
+
 	fmt.Println("\033[36m◇\033[0m  \033[1m\033[97mDoctor\033[0m")
 
+	// Common checks
 	checks := []doctor.Check{
 		withHint(doctor.CheckBinary("ansible-playbook"), "https://docs.ansible.com/ansible/latest/installation_guide/"),
-		withHint(doctor.CheckBinary("aac"), "https://github.com/bitwarden/agent-access"),
-		withHint(doctor.CheckProcessRunning("aac listen", "aac listen"),
-			"Run 'aac listen' in a separate terminal.\n"+
-				"\033[2m\033[90m│\033[0m    Ensure your Bitwarden vault is unlocked first: bw unlock\n"+
-				"\033[2m\033[90m│\033[0m    Then start the listener: aac listen"),
-		asOptional(withHint(doctor.CheckBinary("bw"), "Required by aac — https://bitwarden.com/help/cli/")),
 		doctor.CheckBinary("ssh-keygen"),
 		withHint(doctor.CheckBinary("ssh-copy-id"), "brew install openssh"),
 		doctor.CheckFile(sshConfigPath(), "SSH config"),
 		doctor.CheckFile(configFilePath(), "playbook config"),
-		withHint(doctor.CheckEnvVar("BW_EUS_ITEM_ID"), "export BW_EUS_ITEM_ID=<your-bitwarden-item-id>"),
+	}
+
+	// Provider-specific checks
+	switch providerName {
+	case "aac":
+		checks = append(checks,
+			withHint(doctor.CheckBinary("aac"), "https://github.com/bitwarden/agent-access"),
+			withHint(doctor.CheckProcessRunning("aac listen", "aac listen"),
+				"Run 'aac listen' in a separate terminal.\n"+
+					"\033[2m\033[90m│\033[0m    Ensure your Bitwarden vault is unlocked first: bw unlock\n"+
+					"\033[2m\033[90m│\033[0m    Then start the listener: aac listen"),
+			asOptional(withHint(doctor.CheckBinary("bw"), "Required by aac — https://bitwarden.com/help/cli/")),
+			withHint(doctor.CheckEnvVar(cfg.AAC.ItemIDEnv), fmt.Sprintf("export %s=<your-bitwarden-item-id>", cfg.AAC.ItemIDEnv)),
+		)
+	case "bws":
+		token := os.Getenv(cfg.BWS.AccessTokenEnv)
+		checks = append(checks,
+			withHint(doctor.CheckBinary("bws"), "https://bitwarden.com/help/secrets-manager-cli/"),
+			withHint(doctor.CheckEnvVar(cfg.BWS.AccessTokenEnv), fmt.Sprintf("export %s=<your-bws-access-token>", cfg.BWS.AccessTokenEnv)),
+		)
+		if token != "" {
+			checks = append(checks,
+				withHint(doctor.CheckCommand("bws", "bws auth", "secret", "list", "--access-token", token, "--output", "json"),
+					"Check that your BWS access token is valid and has the right permissions"),
+			)
+			if cfg.BWS.SecretName != "" {
+				checks = append(checks, doctor.Check{
+					Name:   "bws secret '" + cfg.BWS.SecretName + "'",
+					OK:     true,
+					Detail: "configured",
+				})
+			}
+		}
 	}
 
 	allOK := true

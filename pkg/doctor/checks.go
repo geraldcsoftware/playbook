@@ -89,6 +89,30 @@ func CheckProcessRunning(name string, label string) Check {
 	}
 }
 
+// CheckCommand runs a command and reports success/failure.
+// Used to validate that a tool is properly authenticated.
+func CheckCommand(name string, label string, args ...string) Check {
+	cmd := exec.Command(name, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		detail := strings.TrimSpace(string(out))
+		if len(detail) > 100 {
+			detail = detail[:100] + "..."
+		}
+		return Check{
+			Name:   label,
+			OK:     false,
+			Detail: detail,
+			Hint:   fmt.Sprintf("Command failed: %s %s", name, strings.Join(args, " ")),
+		}
+	}
+	return Check{
+		Name:   label,
+		OK:     true,
+		Detail: "authenticated",
+	}
+}
+
 func getVersion(path string, name string) string {
 	for _, flag := range []string{"--version", "version"} {
 		out, err := exec.Command(path, flag).CombinedOutput()
