@@ -123,12 +123,25 @@ func TestBWSProvider_Fetch_PassesColourNoToBWS(t *testing.T) {
 	}
 }
 
-// A coloured response is what the --color flag exists to prevent; if bws ever
-// emits one anyway, the parse failure should be reported rather than swallowed.
-func TestBWSProvider_Fetch_ColouredOutputFailsToParse(t *testing.T) {
+// The stub honours --color no the way bws does, so this test fails if the flag
+// is ever dropped: without it the stub emits ANSI-wrapped JSON and Fetch fails
+// to parse the response.
+func TestBWSProvider_Fetch_ColourFlagKeepsResponseParseable(t *testing.T) {
 	dir := t.TempDir()
 	fakeBWS := filepath.Join(dir, "bws")
-	script := "#!/bin/sh\nprintf '\\033[32m[{\"key\":\"MYANSIBLEPWD\",\"value\":\"ansible456\"}]\\033[0m\\n'\n"
+	json := `[{"key":"MYANSIBLEPWD","value":"ansible456","id":"id1"}]`
+	script := "#!/bin/sh\n" +
+		"colour=1\n" +
+		"prev=\"\"\n" +
+		"for a in \"$@\"; do\n" +
+		"  if [ \"$prev\" = \"--color\" ] && [ \"$a\" = \"no\" ]; then colour=0; fi\n" +
+		"  prev=\"$a\"\n" +
+		"done\n" +
+		"if [ \"$colour\" = \"1\" ]; then\n" +
+		"  printf '\\033[32m" + json + "\\033[0m\\n'\n" +
+		"else\n" +
+		"  printf '" + json + "\\n'\n" +
+		"fi\n"
 	os.WriteFile(fakeBWS, []byte(script), 0755)
 
 	p := &BWSProvider{
@@ -137,11 +150,11 @@ func TestBWSProvider_Fetch_ColouredOutputFailsToParse(t *testing.T) {
 		BinaryPath:  fakeBWS,
 	}
 
-	_, err := p.Fetch()
-	if err == nil {
-		t.Fatal("expected a parse error for coloured output")
+	password, err := p.Fetch()
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
-	if !strings.Contains(err.Error(), "parsing bws response") {
-		t.Errorf("expected a parsing error, got: %v", err)
+	if password != "ansible456" {
+		t.Errorf("expected 'ansible456', got '%s'", password)
 	}
 }
