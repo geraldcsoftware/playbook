@@ -19,6 +19,22 @@ func NewBWSProvider(accessToken string, secretName string) *BWSProvider {
 	}
 }
 
+// BWSArgs builds the argument list for a bws invocation, appending the global
+// flags that every call site needs.
+//
+// Colour is disabled explicitly rather than left at the bws default of "auto":
+// under auto, bws wraps its JSON in ANSI escape sequences whenever it decides
+// it is writing to a terminal, or when a variable such as FORCE_COLOR or
+// CLICOLOR_FORCE is set in the environment, and those escapes break parsing.
+func BWSArgs(accessToken string, args ...string) []string {
+	full := make([]string, 0, len(args)+6)
+	full = append(full, args...)
+	full = append(full, "--access-token", accessToken)
+	full = append(full, "--output", "json")
+	full = append(full, "--color", "no")
+	return full
+}
+
 func (p *BWSProvider) bwsPath() (string, error) {
 	if p.BinaryPath != "" {
 		return p.BinaryPath, nil
@@ -45,7 +61,7 @@ func (p *BWSProvider) Fetch() (string, error) {
 		return "", fmt.Errorf("bws not found on PATH: %w", err)
 	}
 
-	cmd := exec.Command(bwsBin, "secret", "list", "--access-token", p.AccessToken, "--output", "json")
+	cmd := exec.Command(bwsBin, BWSArgs(p.AccessToken, "secret", "list")...)
 	out, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("bws secret list failed: %w", err)

@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/geraldcsoftware/playbook/internal/config"
+	"github.com/geraldcsoftware/playbook/pkg/credentials"
 	"github.com/geraldcsoftware/playbook/pkg/doctor"
 	"github.com/spf13/cobra"
 )
@@ -58,7 +59,7 @@ func runDoctor() error {
 		)
 		if token != "" {
 			checks = append(checks,
-				withHint(doctor.CheckCommand("bws", "bws auth", "secret", "list", "--access-token", token, "--output", "json"),
+				withHint(doctor.CheckCommand("bws", "bws auth", credentials.BWSArgs(token, "secret", "list")...),
 					"Check that your BWS access token is valid and has the right permissions"),
 			)
 			if cfg.BWS.SecretName != "" {
