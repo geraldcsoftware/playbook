@@ -8,6 +8,7 @@
     }
   },
   "enabledPlugins": {
-    "mattpocock-skills@mattpocock": true
+    "mattpocock-skills@mattpocock": true,
+    "cc-plugin-you-should-know@builtin": true
   }
 }
