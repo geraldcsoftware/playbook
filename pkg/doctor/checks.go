@@ -7,12 +7,17 @@ import (
 	"strings"
 )
 
+// Check is the outcome of one doctor check. A failed check stops doctor
+// passing unless it is Optional. A Warning check draws attention to
+// something the operator should fix but never counts as a failure; its
+// Detail says what is wrong.
 type Check struct {
 	Name     string
 	OK       bool
 	Detail   string
 	Hint     string
 	Optional bool
+	Warning  bool
 }
 
 func CheckBinary(name string) Check {

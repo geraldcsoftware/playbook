@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/geraldcsoftware/playbook/internal/config"
 	"github.com/geraldcsoftware/playbook/pkg/credentials"
@@ -21,7 +23,7 @@ func newDoctorCmd() *cobra.Command {
 }
 
 func runDoctor() error {
-	cfg, _ := config.Load(configFilePath())
+	cfg, cfgErr := config.Load(configFilePath())
 
 	providerName := cfg.CredentialProvider
 	if credentialProvider != "" {
@@ -33,10 +35,8 @@ func runDoctor() error {
 	// Common checks
 	checks := []doctor.Check{
 		withHint(doctor.CheckBinary("ansible-playbook"), "https://docs.ansible.com/ansible/latest/installation_guide/"),
-		doctor.CheckBinary("ssh-keygen"),
-		withHint(doctor.CheckBinary("ssh-copy-id"), "brew install openssh"),
 		doctor.CheckFile(sshConfigPath(), "SSH config"),
-		doctor.CheckFile(configFilePath(), "playbook config"),
+		checkConfigFile(configFilePath(), cfgErr),
 	}
 
 	// Provider-specific checks
@@ -75,7 +75,7 @@ func runDoctor() error {
 	allOK := true
 	for _, c := range checks {
 		printCheck(c)
-		if !c.OK && !c.Optional {
+		if !c.OK && !c.Optional && !c.Warning {
 			allOK = false
 		}
 	}
@@ -89,8 +89,38 @@ func runDoctor() error {
 	return fmt.Errorf("doctor: some checks failed")
 }
 
+// checkConfigFile reports on the playbook config file from the error
+// config.Load returned for it. A missing or unusable file only warns: every
+// command still runs on the built-in defaults.
+func checkConfigFile(path string, loadErr error) doctor.Check {
+	switch {
+	case loadErr == nil:
+		return doctor.Check{Name: path, OK: true, Detail: "playbook config"}
+	case errors.Is(loadErr, config.ErrNotFound):
+		return doctor.Check{
+			Name:    path,
+			Warning: true,
+			Detail:  "no playbook config file; using built-in defaults",
+			Hint: "Create it to set default_user, the account a Target is connected as\n" +
+				"\033[2m\033[90m│\033[0m    when its SSH Host names none.",
+		}
+	default:
+		return doctor.Check{
+			Name:    path,
+			Warning: true,
+			Detail:  strings.Join(strings.Fields(loadErr.Error()), " ") + "; using built-in defaults",
+			Hint:    "Fix or remove the file so that your settings take effect.",
+		}
+	}
+}
+
 func printCheck(c doctor.Check) {
-	if c.OK {
+	if c.Warning {
+		fmt.Printf("\033[2m\033[90m│\033[0m  %-28s \033[33m◇\033[0m  \033[33mWARNING:\033[0m %s\n", c.Name, c.Detail)
+		if c.Hint != "" {
+			fmt.Printf("\033[2m\033[90m│\033[0m    %s\n", c.Hint)
+		}
+	} else if c.OK {
 		fmt.Printf("\033[2m\033[90m│\033[0m  %-28s \033[32m✓\033[0m  %s\n", c.Name, c.Detail)
 	} else {
 		fmt.Printf("\033[2m\033[90m│\033[0m  %-28s \033[31m✗\033[0m  not found\n", c.Name)

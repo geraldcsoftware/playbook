@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"testing"
 )
 
@@ -40,11 +41,35 @@ func TestLoadConfig_Defaults(t *testing.T) {
 
 func TestLoadConfig_MissingFileUsesDefaults(t *testing.T) {
 	cfg, err := Load("/nonexistent/path/config.yaml")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", err)
 	}
 	if cfg.DefaultUser != "" {
 		t.Errorf("expected no built-in default user, got %s", cfg.DefaultUser)
+	}
+	if !reflect.DeepEqual(cfg, defaults()) {
+		t.Errorf("expected defaults, got %+v", cfg)
+	}
+}
+
+func TestLoadConfig_UnparsableFileUsesDefaults(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "config.yaml")
+	os.WriteFile(cfgPath, []byte("default_user: [unterminated\n"), 0644)
+
+	cfg, err := Load(cfgPath)
+	var parseErr *ParseError
+	if !errors.As(err, &parseErr) {
+		t.Fatalf("expected *ParseError, got %v", err)
+	}
+	if parseErr.Path != cfgPath {
+		t.Errorf("expected ParseError.Path %s, got %s", cfgPath, parseErr.Path)
+	}
+	if errors.Is(err, ErrNotFound) {
+		t.Error("an unparsable file must not be reported as missing")
+	}
+	if !reflect.DeepEqual(cfg, defaults()) {
+		t.Errorf("expected defaults, got %+v", cfg)
 	}
 	if cfg.CredentialProvider != "aac" {
 		t.Errorf("expected default provider aac, got %s", cfg.CredentialProvider)
