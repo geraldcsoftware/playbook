@@ -38,7 +38,7 @@ func Resolve(alias string, hosts []SSHHost, defaultUser string) ([]ResolvedHost,
 
 	switch len(candidates) {
 	case 0:
-		return nil, fmt.Errorf("no SSH config entry matches '%s' — run 'playbook hosts add' to add it", alias)
+		return nil, fmt.Errorf("no SSH config entry matches '%s' — add a Host entry for it to ~/.ssh/config", alias)
 	case 1:
 		return []ResolvedHost{toResolved(alias, candidates[0], defaultUser)}, nil
 	default:

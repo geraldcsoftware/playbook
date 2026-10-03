@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/geraldcsoftware/playbook/internal/config"
@@ -57,8 +58,10 @@ func newHostsAddCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "add",
-		Short: "Add a new host with SSH key setup",
+		Short: "Add a new host with SSH key setup (deprecated)",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			printHostsAddDeprecation(cmd.ErrOrStderr())
+
 			cfg, _ := config.Load(configFilePath())
 
 			if host == "" {
@@ -126,6 +129,13 @@ func newHostsAddCmd() *cobra.Command {
 	cmd.Flags().StringVar(&keyType, "key-type", "ed25519", "SSH key type (ed25519 or rsa)")
 
 	return cmd
+}
+
+// printHostsAddDeprecation warns that SSH hosts are to be managed outside
+// playbook; the command still runs until it is removed in the next release.
+func printHostsAddDeprecation(w io.Writer) {
+	fmt.Fprintf(w, "\033[33m◇\033[0m  \033[33mWARNING:\033[0m 'playbook hosts add' is deprecated and will be removed in the next release.\n")
+	fmt.Fprintf(w, "\033[33m│\033[0m  Manage SSH hosts directly in ~/.ssh/config, outside playbook.\n")
 }
 
 func newHostsResolveCmd() *cobra.Command {
