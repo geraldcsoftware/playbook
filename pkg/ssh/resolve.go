@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+// ResolvedHost is a Target. Hostname and Port are the address and port
+// OpenSSH effectively connects to for Alias, as `ssh -G` reports them.
 type ResolvedHost struct {
 	Alias        string
 	Hostname     string
@@ -73,7 +75,7 @@ func Resolve(playbookHosts []string, config Config, lookup EffectiveSettingsLook
 		if config.SetsUser(ph) && settings.User() != "" {
 			user = settings.User()
 		}
-		targets = append(targets, toResolved(ph, h, user))
+		targets = append(targets, toResolved(ph, h, settings, user))
 	}
 	return targets, failures
 }
@@ -155,12 +157,16 @@ func editDistance(a, b string) int {
 	return d[len(ra)][len(rb)]
 }
 
-func toResolved(alias string, h SSHHost, user string) ResolvedHost {
-	hostname := h.HostName
+// toResolved builds the Target for alias. Its address and port are the ones
+// OpenSSH effectively applies, so a Port set only in a wildcard block is
+// honoured; where the settings lack them it falls back to OpenSSH's own
+// defaults, the alias itself and port 22.
+func toResolved(alias string, h SSHHost, settings EffectiveSettings, user string) ResolvedHost {
+	hostname := settings.HostName()
 	if hostname == "" {
 		hostname = alias
 	}
-	port := h.Port
+	port := settings.Port()
 	if port == 0 {
 		port = 22
 	}

@@ -28,6 +28,29 @@ func TestParseEffectiveSettings(t *testing.T) {
 	}
 }
 
+func TestEffectiveSettings_HostNameAndPort(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		settings EffectiveSettings
+		hostname string
+		port     int
+	}{
+		{"both set", EffectiveSettings{"hostname": "10.0.0.5", "port": "2222"}, "10.0.0.5", 2222},
+		{"neither set", EffectiveSettings{}, "", 0},
+		{"port not a number", EffectiveSettings{"port": "ssh"}, "", 0},
+		{"port out of range", EffectiveSettings{"port": "70000"}, "", 0},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := tc.settings.HostName(); got != tc.hostname {
+				t.Errorf("HostName() = %q, want %q", got, tc.hostname)
+			}
+			if got := tc.settings.Port(); got != tc.port {
+				t.Errorf("Port() = %d, want %d", got, tc.port)
+			}
+		})
+	}
+}
+
 func TestConfig_SetsUser(t *testing.T) {
 	f := writeConfigFile(t, filepath.Join(t.TempDir(), "config"), `Host db01
     HostName 10.0.0.5
