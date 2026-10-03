@@ -121,7 +121,7 @@ func TestHostsResolve_PrintsEveryFailure(t *testing.T) {
 }
 
 func TestInteractiveScreen_DoesNotOfferRunWithHostResolutionFailures(t *testing.T) {
-	pb := playbook.Playbook{Name: "Site", File: "site.yml", Hosts: []string{"web"}}
+	pb := playbook.Playbook{Name: "Site", File: "site.yml", Plays: []playbook.Play{{Name: "Site", Hosts: []string{"web"}}}}
 	failures := []ssh.HostResolutionFailure{{PlaybookHost: "web", Suggestions: []string{"web-prod-01"}}}
 	m := tui.NewModel(pb, nil, failures, "")
 
@@ -145,7 +145,7 @@ func TestInteractiveScreen_DoesNotOfferRunWithHostResolutionFailures(t *testing.
 }
 
 func TestInteractiveScreen_OffersRunWhenEveryPlaybookHostResolves(t *testing.T) {
-	pb := playbook.Playbook{Name: "Site", File: "site.yml", Hosts: []string{"db01"}}
+	pb := playbook.Playbook{Name: "Site", File: "site.yml", Plays: []playbook.Play{{Name: "Site", Hosts: []string{"db01"}}}}
 	targets := []ssh.ResolvedHost{{Alias: "db01", Hostname: "10.0.0.5", Port: 22}}
 	if view := tui.NewModel(pb, targets, nil, "").View(); !strings.Contains(view, "Run playbook") {
 		t.Errorf("expected Run to be offered, got:\n%s", view)
