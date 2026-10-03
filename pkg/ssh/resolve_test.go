@@ -5,13 +5,13 @@ import (
 )
 
 var testHosts = []SSHHost{
-	{Alias: "db-prod.eus.v.co.zw", HostName: "db-prod.eus.v.co.zw", User: "gchifanzwa", IdentityFile: "~/.ssh/id_rsa_db_prod", Port: 22},
-	{Alias: "db-staging.eus.v.co.zw", HostName: "db-staging.eus.v.co.zw", User: "gchifanzwa", IdentityFile: "~/.ssh/id_rsa_db_staging", Port: 22},
+	{Alias: "db-prod.eus.v.co.zw", HostName: "db-prod.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/id_rsa_db_prod", Port: 22},
+	{Alias: "db-staging.eus.v.co.zw", HostName: "db-staging.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/id_rsa_db_staging", Port: 22},
 	{Alias: "web-01.eus.v.co.zw", HostName: "web-01.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/id_ed25519_web01", Port: 22},
 }
 
 func TestResolve_ExactMatch(t *testing.T) {
-	results, err := Resolve("db-prod.eus.v.co.zw", testHosts, "gchifanzwa")
+	results, err := Resolve("db-prod.eus.v.co.zw", testHosts, "fallback")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -24,7 +24,7 @@ func TestResolve_ExactMatch(t *testing.T) {
 }
 
 func TestResolve_SubstringUnique(t *testing.T) {
-	results, err := Resolve("web-01", testHosts, "gchifanzwa")
+	results, err := Resolve("web-01", testHosts, "fallback")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -37,7 +37,7 @@ func TestResolve_SubstringUnique(t *testing.T) {
 }
 
 func TestResolve_SubstringAmbiguous(t *testing.T) {
-	_, err := Resolve("db-", testHosts, "gchifanzwa")
+	_, err := Resolve("db-", testHosts, "fallback")
 	if err == nil {
 		t.Fatal("expected ambiguous match error")
 	}
@@ -51,14 +51,14 @@ func TestResolve_SubstringAmbiguous(t *testing.T) {
 }
 
 func TestResolve_NoMatch(t *testing.T) {
-	_, err := Resolve("nonexistent", testHosts, "gchifanzwa")
+	_, err := Resolve("nonexistent", testHosts, "fallback")
 	if err == nil {
 		t.Fatal("expected no match error")
 	}
 }
 
 func TestResolve_FallbackUser(t *testing.T) {
-	results, err := Resolve("web-01", testHosts, "gchifanzwa")
+	results, err := Resolve("web-01", testHosts, "fallback")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

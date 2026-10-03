@@ -1,7 +1,9 @@
 package config
 
 import (
+	"errors"
 	"os"
+	"os/user"
 	"path/filepath"
 	"testing"
 )
@@ -28,8 +30,8 @@ func TestLoadConfig_Defaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.DefaultUser != "gchifanzwa" {
-		t.Errorf("expected default user gchifanzwa, got %s", cfg.DefaultUser)
+	if cfg.DefaultUser != "" {
+		t.Errorf("expected no built-in default user, got %s", cfg.DefaultUser)
 	}
 	if cfg.CredentialProvider != "aac" {
 		t.Errorf("expected default provider aac, got %s", cfg.CredentialProvider)
@@ -41,9 +43,44 @@ func TestLoadConfig_MissingFileUsesDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.DefaultUser != "gchifanzwa" {
-		t.Errorf("expected default user, got %s", cfg.DefaultUser)
+	if cfg.DefaultUser != "" {
+		t.Errorf("expected no built-in default user, got %s", cfg.DefaultUser)
 	}
+	if cfg.CredentialProvider != "aac" {
+		t.Errorf("expected default provider aac, got %s", cfg.CredentialProvider)
+	}
+}
+
+func TestEffectiveDefaultUser_ConfiguredValueWins(t *testing.T) {
+	cfg := Config{DefaultUser: "deploy"}
+	if got := cfg.EffectiveDefaultUser(); got != "deploy" {
+		t.Errorf("expected deploy, got %s", got)
+	}
+}
+
+func TestEffectiveDefaultUser_FallsBackToLocalAccount(t *testing.T) {
+	stubCurrentUser(t, &user.User{Username: "local-operator"}, nil)
+	t.Setenv("USER", "env-operator")
+
+	if got := (Config{}).EffectiveDefaultUser(); got != "local-operator" {
+		t.Errorf("expected local-operator, got %s", got)
+	}
+}
+
+func TestEffectiveDefaultUser_FallsBackToUSERWhenLookupFails(t *testing.T) {
+	stubCurrentUser(t, nil, errors.New("lookup failed"))
+	t.Setenv("USER", "env-operator")
+
+	if got := (Config{}).EffectiveDefaultUser(); got != "env-operator" {
+		t.Errorf("expected env-operator, got %s", got)
+	}
+}
+
+func stubCurrentUser(t *testing.T, u *user.User, err error) {
+	t.Helper()
+	orig := currentUser
+	currentUser = func() (*user.User, error) { return u, err }
+	t.Cleanup(func() { currentUser = orig })
 }
 
 func TestLoadConfig_BWSFields(t *testing.T) {

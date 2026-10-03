@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"os/user"
 
 	"gopkg.in/yaml.v3"
 )
@@ -20,16 +21,15 @@ type AACConfig struct {
 }
 
 type Config struct {
-	DefaultUser       string        `yaml:"default_user"`
+	DefaultUser        string        `yaml:"default_user"`
 	CredentialProvider string        `yaml:"credential_provider"`
-	Ansible           AnsibleConfig `yaml:"ansible"`
-	BWS               BWSConfig     `yaml:"bws"`
-	AAC               AACConfig     `yaml:"aac"`
+	Ansible            AnsibleConfig `yaml:"ansible"`
+	BWS                BWSConfig     `yaml:"bws"`
+	AAC                AACConfig     `yaml:"aac"`
 }
 
 func defaults() Config {
 	return Config{
-		DefaultUser:       "gchifanzwa",
 		CredentialProvider: "aac",
 		AAC: AACConfig{
 			ItemIDEnv: "BW_EUS_ITEM_ID",
@@ -60,9 +60,6 @@ func Load(path string) (Config, error) {
 	}
 
 	d := defaults()
-	if cfg.DefaultUser == "" {
-		cfg.DefaultUser = d.DefaultUser
-	}
 	if cfg.CredentialProvider == "" {
 		cfg.CredentialProvider = d.CredentialProvider
 	}
@@ -74,6 +71,23 @@ func Load(path string) (Config, error) {
 	}
 
 	return cfg, nil
+}
+
+// currentUser looks up the operating system account running playbook. It is
+// a variable so tests can simulate a failed lookup.
+var currentUser = user.Current
+
+// EffectiveDefaultUser returns the Default User: default_user from the
+// config file when set, otherwise the operator's operating system account
+// name, falling back to $USER only if that lookup fails.
+func (c Config) EffectiveDefaultUser() string {
+	if c.DefaultUser != "" {
+		return c.DefaultUser
+	}
+	if u, err := currentUser(); err == nil && u.Username != "" {
+		return u.Username
+	}
+	return os.Getenv("USER")
 }
 
 func DefaultPath() string {

@@ -107,7 +107,7 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 
 	var allResolved []ssh.ResolvedHost
 	for _, hostAlias := range pb.Hosts {
-		resolved, err := ssh.Resolve(hostAlias, sshHosts, cfg.DefaultUser)
+		resolved, err := ssh.Resolve(hostAlias, sshHosts, cfg.EffectiveDefaultUser())
 		if err != nil {
 			return fmt.Errorf("resolving host '%s': %w", hostAlias, err)
 		}

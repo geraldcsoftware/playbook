@@ -69,7 +69,7 @@ func newHostsAddCmd() *cobra.Command {
 				fmt.Scanln(&host)
 			}
 			if user == "" {
-				user = cfg.DefaultUser
+				user = cfg.EffectiveDefaultUser()
 				fmt.Printf("  SSH User (%s): ", user)
 				var input string
 				fmt.Scanln(&input)
@@ -160,7 +160,7 @@ func newHostsResolveCmd() *cobra.Command {
 			fmt.Printf("File:     %s\n\n", pb.File)
 
 			for _, hostAlias := range pb.Hosts {
-				resolved, err := ssh.Resolve(hostAlias, sshHosts, cfg.DefaultUser)
+				resolved, err := ssh.Resolve(hostAlias, sshHosts, cfg.EffectiveDefaultUser())
 				if err != nil {
 					fmt.Printf("  ✗ %s — %v\n", hostAlias, err)
 					continue

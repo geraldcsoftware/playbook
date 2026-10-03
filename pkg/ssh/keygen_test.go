@@ -32,11 +32,11 @@ func TestKeyPath(t *testing.T) {
 }
 
 func TestBuildSSHConfigEntry(t *testing.T) {
-	entry := BuildSSHConfigEntry("db-prod.eus.v.co.zw", "gchifanzwa", "~/.ssh/id_ed25519_db_prod", 22)
+	entry := BuildSSHConfigEntry("db-prod.eus.v.co.zw", "deploy", "~/.ssh/id_ed25519_db_prod", 22)
 	if !strings.Contains(entry, "Host db-prod.eus.v.co.zw") {
 		t.Error("expected Host line in entry")
 	}
-	if !strings.Contains(entry, "User gchifanzwa") {
+	if !strings.Contains(entry, "User deploy") {
 		t.Error("expected User line in entry")
 	}
 	if !strings.Contains(entry, "IdentityFile ~/.ssh/id_ed25519_db_prod") {

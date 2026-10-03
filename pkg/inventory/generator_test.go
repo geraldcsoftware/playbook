@@ -10,7 +10,7 @@ import (
 
 func TestGenerate_SingleHost(t *testing.T) {
 	hosts := []ssh.ResolvedHost{
-		{Alias: "db-prod", Hostname: "db-prod.eus.v.co.zw", User: "gchifanzwa", IdentityFile: "~/.ssh/id_rsa_db_prod", Port: 22},
+		{Alias: "db-prod", Hostname: "db-prod.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/id_rsa_db_prod", Port: 22},
 	}
 
 	path, cleanup, err := Generate("db-prod", hosts)
@@ -28,15 +28,15 @@ func TestGenerate_SingleHost(t *testing.T) {
 	if !strings.Contains(content, "[db-prod]") {
 		t.Error("expected [db-prod] group header")
 	}
-	if !strings.Contains(content, "db-prod.eus.v.co.zw ansible_user=gchifanzwa ansible_ssh_private_key_file=~/.ssh/id_rsa_db_prod") {
+	if !strings.Contains(content, "db-prod.eus.v.co.zw ansible_user=deploy ansible_ssh_private_key_file=~/.ssh/id_rsa_db_prod") {
 		t.Errorf("expected inline host vars, got:\n%s", content)
 	}
 }
 
 func TestGenerate_MultipleHosts(t *testing.T) {
 	hosts := []ssh.ResolvedHost{
-		{Alias: "db-prod", Hostname: "db-prod.eus.v.co.zw", User: "gchifanzwa", IdentityFile: "~/.ssh/key1", Port: 22},
-		{Alias: "web-01", Hostname: "web-01.eus.v.co.zw", User: "gchifanzwa", IdentityFile: "~/.ssh/key2", Port: 22},
+		{Alias: "db-prod", Hostname: "db-prod.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/key1", Port: 22},
+		{Alias: "web-01", Hostname: "web-01.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/key2", Port: 22},
 	}
 
 	path, cleanup, err := Generate("mygroup", hosts)

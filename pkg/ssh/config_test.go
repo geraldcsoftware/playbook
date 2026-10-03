@@ -8,7 +8,7 @@ import (
 
 const testSSHConfig = `Host db-prod.eus.v.co.zw
     HostName db-prod.eus.v.co.zw
-    User gchifanzwa
+    User deploy
     IdentityFile ~/.ssh/id_rsa_db_prod
     Port 22
 
@@ -42,8 +42,8 @@ func TestParseConfig(t *testing.T) {
 	if h.HostName != "db-prod.eus.v.co.zw" {
 		t.Errorf("expected hostname db-prod.eus.v.co.zw, got %s", h.HostName)
 	}
-	if h.User != "gchifanzwa" {
-		t.Errorf("expected user gchifanzwa, got %s", h.User)
+	if h.User != "deploy" {
+		t.Errorf("expected user deploy, got %s", h.User)
 	}
 	if h.IdentityFile != "~/.ssh/id_rsa_db_prod" {
 		t.Errorf("expected identity file ~/.ssh/id_rsa_db_prod, got %s", h.IdentityFile)
