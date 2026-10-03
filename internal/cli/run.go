@@ -9,6 +9,7 @@ import (
 	"github.com/geraldcsoftware/playbook/pkg/ansible"
 	"github.com/geraldcsoftware/playbook/pkg/credentials"
 	"github.com/geraldcsoftware/playbook/pkg/inventory"
+	"github.com/geraldcsoftware/playbook/pkg/playbook"
 	"github.com/geraldcsoftware/playbook/pkg/ssh"
 	"github.com/spf13/cobra"
 )
@@ -102,7 +103,7 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 	// Phase 1: Playbook Discovery
 	fmt.Println("\033[36m◇\033[0m  \033[1m\033[97mPlaybook Discovery\033[0m")
 
-	pb, err := parsePlaybook(playbookFile)
+	pb, err := playbook.Parse(playbookFile)
 	if err != nil {
 		return err
 	}
@@ -125,7 +126,7 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 			fmt.Printf("\033[2m\033[90m│\033[0m  %s → %s\n", r.Alias, r.Hostname)
 		}
 		for _, f := range failures {
-			fmt.Printf("\033[2m\033[90m│\033[0m  %s — \033[31m✗\033[0m %s\n", f.PlaybookHost, f.Error())
+			fmt.Printf("\033[2m\033[90m│\033[0m  %s — \033[31m✗\033[0m %s\n", f.Subject(), f.Error())
 		}
 		if len(failures) > 0 {
 			fmt.Println("\033[31m■\033[0m  \033[31mHost Resolution failed\033[0m")

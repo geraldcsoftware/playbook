@@ -94,34 +94,81 @@ func TestParse_CommaSeparatedHosts(t *testing.T) {
 	}
 }
 
-func TestParse_UnsupportedHostPattern(t *testing.T) {
-	patterns := []string{"all", "web:&staging", "*.example.com", "!db-prod", "web,all"}
-	for _, p := range patterns {
-		if _, err := Parse(writePlaybook(t, "- name: Test\n  hosts: \""+p+"\"\n  tasks: []\n")); err == nil {
-			t.Errorf("expected error for host pattern '%s', got nil", p)
+func TestParse_PatternsAndTemplatesAreKeptAsWritten(t *testing.T) {
+	tests := map[string][]string{
+		`all`:                             {"all"},
+		`"web:&staging"`:                  {"web:&staging"},
+		`"*.example.com"`:                 {"*.example.com"},
+		`"!db-prod"`:                      {"!db-prod"},
+		`"web,all"`:                       {"web,all"},
+		`" web , db:&staging "`:           {"web , db:&staging"},
+		`"~(web|db){1,3}"`:                {"~(web|db){1,3}"},
+		`"{{ target }}"`:                  {"{{ target }}"},
+		`"{{ groups['a,b'] | first }}"`:   {"{{ groups['a,b'] | first }}"},
+		`["{{ target }}", "web,db", all]`: {"{{ target }}", "web", "db", "all"},
+	}
+	for hosts, want := range tests {
+		pb, err := Parse(writePlaybook(t, "- hosts: "+hosts+"\n  tasks: []\n"))
+		if err != nil {
+			t.Fatalf("hosts %s: unexpected error: %v", hosts, err)
+		}
+		if got := pb.Plays[0].Hosts; !slices.Equal(got, want) {
+			t.Errorf("hosts %s = %q, want %q", hosts, got, want)
 		}
 	}
 }
 
-func TestParse_UnsupportedHostPatternInALaterPlay(t *testing.T) {
-	if _, err := Parse(writePlaybook(t, "- hosts: web\n- hosts: \"db:&staging\"\n")); err == nil {
-		t.Error("expected a pattern in a later play to be rejected")
+func TestIsPattern(t *testing.T) {
+	for host, want := range map[string]bool{
+		"all":           true,
+		"web*":          true,
+		"web?":          true,
+		"web:db":        true,
+		"web:&prod":     true,
+		"!db":           true,
+		"~web.*":        true,
+		"web[0:2]":      true,
+		"web,all":       true,
+		"allhosts":      false,
+		"db-prod":       false,
+		"web.example":   false,
+		"{{ target }}":  false,
+		"web01, db01":   false,
+		"192.168.1.10":  false,
+		"web_prod-01.a": false,
+	} {
+		if got := IsPattern(host); got != want {
+			t.Errorf("IsPattern(%q) = %v, want %v", host, got, want)
+		}
+	}
+}
+
+func TestIsTemplate(t *testing.T) {
+	for host, want := range map[string]bool{
+		"{{ target }}":     true,
+		"web-{{ env }}":    true,
+		"web":              false,
+		"{ not-a-template": false,
+	} {
+		if got := IsTemplate(host); got != want {
+			t.Errorf("IsTemplate(%q) = %v, want %v", host, got, want)
+		}
+	}
+}
+
+func TestParse_OnlyImports(t *testing.T) {
+	pb, err := Parse(writePlaybook(t, "- import_playbook: other.yml\n"))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(pb.Plays) != 0 || !slices.Equal(pb.Imports, []string{"other.yml"}) {
+		t.Errorf("expected only the import, got %+v", pb)
 	}
 }
 
 func TestParse_NoPlays(t *testing.T) {
-	if _, err := Parse(writePlaybook(t, "- import_playbook: other.yml\n")); err == nil {
+	if _, err := Parse(writePlaybook(t, "[]\n")); err == nil {
 		t.Error("expected a playbook with no plays to be rejected")
-	}
-}
-
-func TestParseAnyPattern_EveryPlay(t *testing.T) {
-	pb, err := ParseAnyPattern(writePlaybook(t, "- hosts: all\n- hosts: \"web:&staging\"\n"))
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got, want := pb.Hosts(), []string{"all", "web:&staging"}; !slices.Equal(got, want) {
-		t.Errorf("Hosts() = %q, want %q", got, want)
 	}
 }
 

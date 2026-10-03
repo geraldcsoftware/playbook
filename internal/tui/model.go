@@ -110,7 +110,7 @@ func (m Model) View() string {
 		}
 	}
 	for _, f := range m.failures {
-		s += "  " + errorStyle.Render("! "+f.PlaybookHost+": "+f.Error()) + "\n"
+		s += "  " + errorStyle.Render("! "+f.Subject()+": "+f.Error()) + "\n"
 	}
 	if len(m.failures) > 0 {
 		s += "  " + errorStyle.Render("Run unavailable until every Playbook Host resolves") + "\n"

@@ -6,6 +6,7 @@ import (
 
 	"github.com/geraldcsoftware/playbook/internal/config"
 	"github.com/geraldcsoftware/playbook/internal/tui"
+	"github.com/geraldcsoftware/playbook/pkg/playbook"
 	"github.com/geraldcsoftware/playbook/pkg/ssh"
 	"github.com/spf13/cobra"
 )
@@ -33,7 +34,7 @@ func newRootCmd() *cobra.Command {
 				return err
 			}
 
-			pb, err := parsePlaybook(args[0])
+			pb, err := playbook.Parse(args[0])
 			if err != nil {
 				return err
 			}
@@ -67,7 +68,7 @@ func newRootCmd() *cobra.Command {
 						r.Alias, r.Hostname, r.User, r.IdentityFile, r.Port)
 				}
 				for _, f := range failures {
-					fmt.Printf("  %s -> %v\n", f.PlaybookHost, f)
+					fmt.Printf("  %s -> %v\n", f.Subject(), f)
 				}
 			case tui.ActionQuit:
 				// nothing

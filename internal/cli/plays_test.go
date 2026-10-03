@@ -121,8 +121,9 @@ func TestRun_UnresolvedPlaybookHostInSeveralPlaysIsReportedOnce(t *testing.T) {
 	assertNothingExecuted(t, h, out)
 }
 
-func TestRun_ImportPlaybookEntriesAreSkipped(t *testing.T) {
+func TestRun_ImportPlaybookEntriesRunWithAnExplicitInventory(t *testing.T) {
 	h := newPlaysHarness(t)
+	inv := h.WritePlaybook("inv.ini", explicitInventoryContent)
 	pb := h.WritePlaybook("site.yml", `- import_playbook: other.yml
 - ansible.builtin.import_playbook: more.yml
 - name: Web tier
@@ -130,11 +131,11 @@ func TestRun_ImportPlaybookEntriesAreSkipped(t *testing.T) {
   tasks: []
 `)
 
-	out, err := captureStdout(t, func() error { return h.Run("run", pb, "--no-preflight") })
+	out, err := captureStdout(t, func() error { return h.Run("run", "--inventory", inv, pb) })
 	if err != nil {
 		t.Fatalf("run: %v\n%s", err, out)
 	}
-	if got, want := h.Inventory(), "web ansible_user=operator\n"; got != want {
-		t.Errorf("Generated Inventory =\n%s\nwant\n%s", got, want)
+	if got := h.Inventory(); got != explicitInventoryContent {
+		t.Errorf("inventory given to ansible-playbook =\n%s\nwant the Explicit Inventory", got)
 	}
 }
