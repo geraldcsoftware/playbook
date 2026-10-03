@@ -7,12 +7,11 @@ import (
 	"testing"
 )
 
-// TestRun_Characterisation_SingleHost_CurrentInventory pins down what `run`
-// does today for one literal Playbook Host. The Generated Inventory it
-// asserts (entry named after the SSH Host's HostName, no ssh -G lookup)
-// predates ADR 0001 and is expected to change with the Host Resolution
-// rework; update this test then rather than treating it as a regression.
-func TestRun_Characterisation_SingleHost_CurrentInventory(t *testing.T) {
+// TestRun_SingleHost_GeneratedInventoryNamesSSHAlias pins down what `run`
+// does end to end for one literal Playbook Host: the Generated Inventory
+// names the SSH Alias and records only the user `ssh -G` reports (ADR 0001),
+// and the become password reaches ansible-playbook.
+func TestRun_SingleHost_GeneratedInventoryNamesSSHAlias(t *testing.T) {
 	h := newHarness(t)
 	h.WriteSSHConfig("Host db01\n    HostName 10.0.0.5\n    User deploy\n")
 	h.WriteConfig("default_user: operator\ncredential_provider: aac\n")
@@ -28,7 +27,7 @@ func TestRun_Characterisation_SingleHost_CurrentInventory(t *testing.T) {
 		t.Fatalf("ansible-playbook argv = %q, want [%s --inventory <path>]", args, pb)
 	}
 
-	if got, want := h.Inventory(), "[db01]\n10.0.0.5 ansible_user=deploy\n"; got != want {
+	if got, want := h.Inventory(), "db01 ansible_user=deploy\n"; got != want {
 		t.Errorf("Generated Inventory =\n%s\nwant\n%s", got, want)
 	}
 
@@ -36,14 +35,15 @@ func TestRun_Characterisation_SingleHost_CurrentInventory(t *testing.T) {
 		t.Errorf("ANSIBLE_BECOME_PASS = %q, want %q", got, harnessPassword)
 	}
 
-	if calls := h.SSHCalls(); len(calls) != 0 {
-		t.Errorf("expected no ssh calls today, got %q", calls)
+	if got, want := h.SSHCalls(), []string{"-G db01"}; !slices.Equal(got, want) {
+		t.Errorf("ssh calls = %q, want %q", got, want)
 	}
 }
 
 func TestHarness_AnsibleExitCodePropagates(t *testing.T) {
 	h := newHarness(t)
 	h.WriteSSHConfig("Host db01\n    HostName 10.0.0.5\n    User deploy\n")
+	h.SetSSHEffectiveConfig("db01", "hostname 10.0.0.5\nuser deploy")
 	h.SetAnsibleExitCode(4)
 	pb := h.WritePlaybook("site.yml", "- hosts: db01\n  tasks: []\n")
 
@@ -56,6 +56,7 @@ func TestHarness_AnsibleExitCodePropagates(t *testing.T) {
 func TestHarness_ExtraArgsReachAnsible(t *testing.T) {
 	h := newHarness(t)
 	h.WriteSSHConfig("Host db01\n    HostName 10.0.0.5\n    User deploy\n")
+	h.SetSSHEffectiveConfig("db01", "hostname 10.0.0.5\nuser deploy")
 	pb := h.WritePlaybook("site.yml", "- hosts: db01\n  tasks: []\n")
 
 	if err := h.Run("run", pb, "--no-preflight", "--", "--check", "-e", "x=1 y"); err != nil {

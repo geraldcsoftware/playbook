@@ -11,13 +11,14 @@ func TestRun_ResolvesEitherNameOnAMultiNameHostLine(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			h := newHarness(t)
 			h.WriteSSHConfig("Host web web-prod\n    HostName 10.0.0.7\n    User deploy\n")
+			h.SetSSHEffectiveConfig(name, "hostname 10.0.0.7\nuser deploy")
 			pb := h.WritePlaybook("site.yml", "- hosts: "+name+"\n  tasks: []\n")
 
 			if err := h.Run("run", pb, "--no-preflight"); err != nil {
 				t.Fatalf("run: %v", err)
 			}
-			if inv := h.Inventory(); !strings.Contains(inv, "10.0.0.7 ansible_user=deploy") {
-				t.Errorf("Generated Inventory does not target the SSH Host:\n%s", inv)
+			if got, want := h.Inventory(), name+" ansible_user=deploy\n"; got != want {
+				t.Errorf("Generated Inventory =\n%s\nwant\n%s", got, want)
 			}
 		})
 	}
@@ -27,13 +28,14 @@ func TestRun_ResolvesSSHHostFromIncludedFile(t *testing.T) {
 	h := newHarness(t)
 	h.WriteSSHConfig("Include conf.d/*.conf\n")
 	h.writeFile(filepath.Join(h.Home, ".ssh", "conf.d", "db.conf"), "Host db01\n    HostName 10.0.0.5\n    User dba\n", 0o600)
+	h.SetSSHEffectiveConfig("db01", "hostname 10.0.0.5\nuser dba")
 	pb := h.WritePlaybook("site.yml", "- hosts: db01\n  tasks: []\n")
 
 	if err := h.Run("run", pb, "--no-preflight"); err != nil {
 		t.Fatalf("run: %v", err)
 	}
-	if inv := h.Inventory(); !strings.Contains(inv, "10.0.0.5 ansible_user=dba") {
-		t.Errorf("Generated Inventory does not target the included SSH Host:\n%s", inv)
+	if got, want := h.Inventory(), "db01 ansible_user=dba\n"; got != want {
+		t.Errorf("Generated Inventory =\n%s\nwant\n%s", got, want)
 	}
 }
 

@@ -47,6 +47,7 @@ func TestRun_ReportsEveryUnresolvedPlaybookHostInOnePass(t *testing.T) {
 	h := newHarness(t)
 	h.WriteConfig("credential_provider: aac\n")
 	h.WriteSSHConfig(hostResolutionSSHConfig)
+	h.SetSSHEffectiveConfig("db01", "hostname 127.0.0.1\nport 1")
 	pb := h.WritePlaybook("site.yml", "- hosts: [web, db01, db1]\n  tasks: []\n")
 
 	out, err := captureStdout(t, func() error { return h.Run("run", pb) })
@@ -68,6 +69,7 @@ func TestRun_AnySSHAliasOfAnSSHHostResolves(t *testing.T) {
 	h := newHarness(t)
 	h.WriteConfig("credential_provider: aac\n")
 	h.WriteSSHConfig(hostResolutionSSHConfig)
+	h.SetSSHEffectiveConfig("db-primary", "hostname 127.0.0.1\nport 1")
 	pb := h.WritePlaybook("site.yml", "- hosts: db-primary\n  tasks: []\n")
 
 	out, err := captureStdout(t, func() error { return h.Run("run", pb, "--no-preflight") })
@@ -100,6 +102,7 @@ func assertNothingExecuted(t *testing.T, h *harness, out string) {
 func TestHostsResolve_PrintsEveryFailure(t *testing.T) {
 	h := newHarness(t)
 	h.WriteSSHConfig(hostResolutionSSHConfig)
+	h.SetSSHEffectiveConfig("db-primary", "hostname 127.0.0.1\nport 1")
 	pb := h.WritePlaybook("site.yml", "- name: Site\n  hosts: [web, db-primary, db1]\n  tasks: []\n")
 
 	out, err := captureStdout(t, func() error { return h.Run("hosts", "resolve", pb) })

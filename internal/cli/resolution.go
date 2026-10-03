@@ -13,10 +13,10 @@ import (
 // one entry point run, hosts resolve and the interactive screen share; the
 // error is reserved for an SSH configuration that cannot be read.
 func resolveHosts(pb playbook.Playbook, cfg config.Config) ([]ssh.ResolvedHost, []ssh.HostResolutionFailure, error) {
-	sshHosts, err := ssh.ParseConfig(sshConfigPath())
+	sshConfig, err := ssh.LoadConfig(sshConfigPath())
 	if err != nil {
 		return nil, nil, fmt.Errorf("parsing SSH config: %w", err)
 	}
-	targets, failures := ssh.Resolve(pb.Hosts, sshHosts, cfg.EffectiveDefaultUser())
+	targets, failures := ssh.Resolve(pb.Hosts, sshConfig, ssh.OpenSSHLookup{}, cfg.EffectiveDefaultUser())
 	return targets, failures, nil
 }

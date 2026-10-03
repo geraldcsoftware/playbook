@@ -24,14 +24,19 @@ const maxSuggestionDistance = 2
 const maxSuggestions = 3
 
 // HostResolutionFailure is a Playbook Host that Host Resolution could not
-// match to an SSH Alias. Suggestions lists the nearest SSH Aliases, nearest
-// first.
+// turn into a Target. Either it matched no SSH Alias, and Suggestions lists
+// the nearest SSH Aliases, nearest first; or it matched one whose effective
+// settings could not be read, and Err says why.
 type HostResolutionFailure struct {
 	PlaybookHost string
 	Suggestions  []string
+	Err          error
 }
 
 func (f HostResolutionFailure) Error() string {
+	if f.Err != nil {
+		return fmt.Sprintf("could not read the SSH settings for SSH Alias '%s': %v — fix its SSH configuration or pass --inventory", f.PlaybookHost, f.Err)
+	}
 	msg := fmt.Sprintf("no SSH Alias named '%s' in ~/.ssh/config", f.PlaybookHost)
 	if len(f.Suggestions) > 0 {
 		msg += fmt.Sprintf(" (did you mean %s?)", strings.Join(f.Suggestions, ", "))
@@ -40,35 +45,48 @@ func (f HostResolutionFailure) Error() string {
 }
 
 // Resolve performs Host Resolution: each Playbook Host resolves only to an
-// SSH Alias equal to it, any alias of an SSH Host counting. It returns a
-// Target for every Playbook Host that resolved and a failure for every one
-// that did not, so all failures can be reported together; a run must not
-// proceed while any failure exists.
-func Resolve(playbookHosts []string, hosts []SSHHost, defaultUser string) ([]ResolvedHost, []HostResolutionFailure) {
+// SSH Alias equal to it, any alias of an SSH Host counting. Each Target's
+// User is the one OpenSSH effectively applies, as lookup reports it, when
+// the configuration sets a User for that alias in any matching block;
+// otherwise it is defaultUser. It returns a Target for every Playbook Host
+// that resolved and a failure for every one that did not, so all failures
+// can be reported together; a run must not proceed while any failure
+// exists.
+func Resolve(playbookHosts []string, config Config, lookup EffectiveSettingsLookup, defaultUser string) ([]ResolvedHost, []HostResolutionFailure) {
 	var targets []ResolvedHost
 	var failures []HostResolutionFailure
 	for _, ph := range playbookHosts {
-		if target, ok := resolveOne(ph, hosts, defaultUser); ok {
-			targets = append(targets, target)
+		h, ok := matchAlias(ph, config.Hosts)
+		if !ok {
+			failures = append(failures, HostResolutionFailure{
+				PlaybookHost: ph,
+				Suggestions:  suggestAliases(ph, config.Hosts),
+			})
 			continue
 		}
-		failures = append(failures, HostResolutionFailure{
-			PlaybookHost: ph,
-			Suggestions:  suggestAliases(ph, hosts),
-		})
+		settings, err := lookup.EffectiveSettings(ph)
+		if err != nil {
+			failures = append(failures, HostResolutionFailure{PlaybookHost: ph, Err: err})
+			continue
+		}
+		user := defaultUser
+		if config.SetsUser(ph) && settings.User() != "" {
+			user = settings.User()
+		}
+		targets = append(targets, toResolved(ph, h, user))
 	}
 	return targets, failures
 }
 
-// resolveOne matches playbookHost to the first SSH Host, in file order, with
-// an SSH Alias equal to it, as OpenSSH itself would.
-func resolveOne(playbookHost string, hosts []SSHHost, defaultUser string) (ResolvedHost, bool) {
+// matchAlias finds the first SSH Host, in file order, with an SSH Alias
+// equal to playbookHost, as OpenSSH itself would.
+func matchAlias(playbookHost string, hosts []SSHHost) (SSHHost, bool) {
 	for _, h := range hosts {
 		if slices.Contains(h.Aliases, playbookHost) {
-			return toResolved(playbookHost, h, defaultUser), true
+			return h, true
 		}
 	}
-	return ResolvedHost{}, false
+	return SSHHost{}, false
 }
 
 // suggestAliases returns the SSH Aliases that contain playbookHost or are
@@ -137,14 +155,10 @@ func editDistance(a, b string) int {
 	return d[len(ra)][len(rb)]
 }
 
-func toResolved(alias string, h SSHHost, defaultUser string) ResolvedHost {
+func toResolved(alias string, h SSHHost, user string) ResolvedHost {
 	hostname := h.HostName
 	if hostname == "" {
 		hostname = alias
-	}
-	user := h.User
-	if user == "" {
-		user = defaultUser
 	}
 	port := h.Port
 	if port == 0 {

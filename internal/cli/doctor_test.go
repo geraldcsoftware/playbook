@@ -108,6 +108,7 @@ func TestRun_MissingOrUnparsableConfigFallsBackSilently(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			h := newHarness(t)
 			h.WriteSSHConfig("Host db01\n    HostName 10.0.0.5\n    User deploy\n")
+			h.SetSSHEffectiveConfig("db01", "hostname 10.0.0.5\nuser deploy")
 			setup(h)
 			pb := h.WritePlaybook("site.yml", "- hosts: db01\n  tasks: []\n")
 

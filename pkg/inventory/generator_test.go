@@ -2,18 +2,14 @@ package inventory
 
 import (
 	"os"
-	"strings"
 	"testing"
 
 	"github.com/geraldcsoftware/playbook/pkg/ssh"
 )
 
-func TestGenerate_SingleHost(t *testing.T) {
-	hosts := []ssh.ResolvedHost{
-		{Alias: "db-prod", Hostname: "db-prod.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/id_rsa_db_prod", Port: 22},
-	}
-
-	path, cleanup, err := Generate("db-prod", hosts)
+func readInventory(t *testing.T, targets []ssh.ResolvedHost) string {
+	t.Helper()
+	path, cleanup, err := Generate(targets)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -23,66 +19,26 @@ func TestGenerate_SingleHost(t *testing.T) {
 	if err != nil {
 		t.Fatalf("reading inventory: %v", err)
 	}
-
-	content := string(data)
-	if !strings.Contains(content, "[db-prod]") {
-		t.Error("expected [db-prod] group header")
-	}
-	if !strings.Contains(content, "db-prod.eus.v.co.zw ansible_user=deploy ansible_ssh_private_key_file=~/.ssh/id_rsa_db_prod") {
-		t.Errorf("expected inline host vars, got:\n%s", content)
-	}
+	return string(data)
 }
 
-func TestGenerate_MultipleHosts(t *testing.T) {
-	hosts := []ssh.ResolvedHost{
-		{Alias: "db-prod", Hostname: "db-prod.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/key1", Port: 22},
-		{Alias: "web-01", Hostname: "web-01.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/key2", Port: 22},
+func TestGenerate_EntriesAreSSHAliasesWithOnlyTheUser(t *testing.T) {
+	targets := []ssh.ResolvedHost{
+		{Alias: "db-prod", Hostname: "db-prod.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/id_rsa_db_prod", Port: 2222},
+		{Alias: "web-01", Hostname: "web-01.eus.v.co.zw", User: "www", Port: 22},
 	}
 
-	path, cleanup, err := Generate("mygroup", hosts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	defer cleanup()
-
-	data, _ := os.ReadFile(path)
-	content := string(data)
-
-	if !strings.Contains(content, "[mygroup]") {
-		t.Error("expected [mygroup] group header")
-	}
-	if !strings.Contains(content, "db-prod.eus.v.co.zw") {
-		t.Error("expected first host")
-	}
-	if !strings.Contains(content, "web-01.eus.v.co.zw") {
-		t.Error("expected second host")
-	}
-}
-
-func TestGenerate_CustomPort(t *testing.T) {
-	hosts := []ssh.ResolvedHost{
-		{Alias: "custom", Hostname: "custom.example.com", User: "user", IdentityFile: "~/.ssh/key", Port: 2222},
-	}
-
-	path, cleanup, err := Generate("custom", hosts)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	defer cleanup()
-
-	data, _ := os.ReadFile(path)
-	content := string(data)
-	if !strings.Contains(content, "ansible_port=2222") {
-		t.Error("expected ansible_port=2222 for non-default port")
+	got := readInventory(t, targets)
+	want := "db-prod ansible_user=deploy\nweb-01 ansible_user=www\n"
+	if got != want {
+		t.Errorf("Generated Inventory =\n%s\nwant\n%s", got, want)
 	}
 }
 
 func TestGenerate_Cleanup(t *testing.T) {
-	hosts := []ssh.ResolvedHost{
-		{Alias: "tmp", Hostname: "tmp.example.com", User: "user", Port: 22},
-	}
+	targets := []ssh.ResolvedHost{{Alias: "tmp", User: "user"}}
 
-	path, cleanup, err := Generate("tmp", hosts)
+	path, cleanup, err := Generate(targets)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

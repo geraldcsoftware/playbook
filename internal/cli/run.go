@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/geraldcsoftware/playbook/internal/config"
@@ -175,8 +174,7 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 	// Phase 5: Generate inventory, unless an Explicit Inventory is in use
 	invPath := explicitInventory
 	if invPath == "" {
-		groupName := strings.Join(pb.Hosts, "_")
-		generated, cleanup, err := inventory.Generate(groupName, allResolved)
+		generated, cleanup, err := inventory.Generate(allResolved)
 		if err != nil {
 			return fmt.Errorf("generating inventory: %w", err)
 		}
