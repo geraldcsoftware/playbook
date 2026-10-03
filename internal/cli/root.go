@@ -54,7 +54,7 @@ func newRootCmd() *cobra.Command {
 			}
 
 			if action == tui.ActionRun && len(failures) > 0 {
-				return fmt.Errorf("Host Resolution failed for %d Playbook Host(s) — the playbook cannot be run", len(failures))
+				return fmt.Errorf("Host Resolution failed with %d problem(s) — the playbook cannot be run", len(failures))
 			}
 
 			switch action {

@@ -91,7 +91,7 @@ func TestRun_FailedSSHSettingsLookupIsAHostResolutionFailure(t *testing.T) {
 	// No ssh -G fixture for db01, so the fake ssh exits 255 for it.
 
 	out, err := runPlaybookHosts(t, h, "[db01, web01, mail]")
-	if err == nil || !strings.Contains(err.Error(), "2 Playbook Host(s)") {
+	if err == nil || !strings.Contains(err.Error(), "2 problem(s)") {
 		t.Fatalf("expected a Host Resolution failure for 2 Playbook Hosts, got %v\n%s", err, out)
 	}
 	for _, want := range []string{

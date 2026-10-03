@@ -51,7 +51,7 @@ func TestRun_ReportsEveryUnresolvedPlaybookHostInOnePass(t *testing.T) {
 	pb := h.WritePlaybook("site.yml", "- hosts: [web, db01, db1]\n  tasks: []\n")
 
 	out, err := captureStdout(t, func() error { return h.Run("run", pb) })
-	if err == nil || !strings.Contains(err.Error(), "2 Playbook Host(s)") {
+	if err == nil || !strings.Contains(err.Error(), "2 problem(s)") {
 		t.Fatalf("expected a Host Resolution failure for 2 Playbook Hosts, got %v\n%s", err, out)
 	}
 	for _, want := range []string{

@@ -130,7 +130,7 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 		}
 		if len(failures) > 0 {
 			fmt.Println("\033[31m■\033[0m  \033[31mHost Resolution failed\033[0m")
-			return fmt.Errorf("Host Resolution failed for %d Playbook Host(s)", len(failures))
+			return fmt.Errorf("Host Resolution failed with %d problem(s)", len(failures))
 		}
 		fmt.Printf("\033[2m\033[90m│\033[0m  \033[97m%d host(s) resolved\033[0m \033[32m✓\033[0m\n", len(allResolved))
 	}

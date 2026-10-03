@@ -172,7 +172,7 @@ func newHostsResolveCmd() *cobra.Command {
 				fmt.Printf("  ✗ %s — %v\n", f.Subject(), f)
 			}
 			if len(failures) > 0 {
-				return fmt.Errorf("Host Resolution failed for %d Playbook Host(s)", len(failures))
+				return fmt.Errorf("Host Resolution failed with %d problem(s)", len(failures))
 			}
 			return nil
 		},

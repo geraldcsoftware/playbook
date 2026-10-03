@@ -112,7 +112,7 @@ func TestRun_UnresolvedPlaybookHostInSeveralPlaysIsReportedOnce(t *testing.T) {
 	pb := h.WritePlaybook("site.yml", "- hosts: mail\n  tasks: []\n- hosts: [web, mail]\n  tasks: []\n")
 
 	out, err := captureStdout(t, func() error { return h.Run("run", pb, "--no-preflight") })
-	if err == nil || !strings.Contains(err.Error(), "1 Playbook Host(s)") {
+	if err == nil || !strings.Contains(err.Error(), "1 problem(s)") {
 		t.Fatalf("expected a Host Resolution failure for 1 Playbook Host, got %v\n%s", err, out)
 	}
 	if n := strings.Count(out, "no SSH Alias named 'mail'"); n != 1 {
