@@ -144,9 +144,9 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 		results := ssh.RunPreflight(allResolved, timeout)
 		for _, r := range results {
 			if r.Reachable {
-				fmt.Printf("\033[2m\033[90m│\033[0m  %s — port %d reachable \033[32m✓\033[0m\n", r.Host, r.Port)
+				fmt.Printf("\033[2m\033[90m│\033[0m  %s (%s) — reachable \033[32m✓\033[0m\n", r.Alias, r.Address())
 			} else {
-				fmt.Printf("\033[2m\033[90m│\033[0m  %s — \033[31m✗\033[0m %s\n", r.Host, r.Error)
+				fmt.Printf("\033[2m\033[90m│\033[0m  %s (%s) — \033[31m✗\033[0m %s\n", r.Alias, r.Address(), r.Error)
 			}
 		}
 

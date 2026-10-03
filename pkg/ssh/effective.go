@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
@@ -16,6 +17,20 @@ type EffectiveSettings map[string]string
 
 // User is the user OpenSSH connects to the SSH Alias as.
 func (s EffectiveSettings) User() string { return s["user"] }
+
+// HostName is the address OpenSSH connects to for the SSH Alias, or empty
+// when the settings name none.
+func (s EffectiveSettings) HostName() string { return s["hostname"] }
+
+// Port is the port OpenSSH connects to for the SSH Alias, or 0 when the
+// settings name none or it is not a valid port number.
+func (s EffectiveSettings) Port() int {
+	port, err := strconv.Atoi(s["port"])
+	if err != nil || port < 1 || port > 65535 {
+		return 0
+	}
+	return port
+}
 
 // EffectiveSettingsLookup reports the settings OpenSSH applies to an SSH
 // Alias.
