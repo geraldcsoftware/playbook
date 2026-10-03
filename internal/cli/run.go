@@ -10,7 +10,6 @@ import (
 	"github.com/geraldcsoftware/playbook/pkg/ansible"
 	"github.com/geraldcsoftware/playbook/pkg/credentials"
 	"github.com/geraldcsoftware/playbook/pkg/inventory"
-	"github.com/geraldcsoftware/playbook/pkg/playbook"
 	"github.com/geraldcsoftware/playbook/pkg/ssh"
 	"github.com/spf13/cobra"
 )
@@ -27,7 +26,16 @@ func newRunCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "run <playbook.yml> [-- extra-ansible-args...]",
 		Short: "Run an Ansible playbook with pre-flight checks and credential injection",
-		Args:  cobra.MinimumNArgs(1),
+		Long: `Run an Ansible playbook with pre-flight checks and credential injection.
+
+Without --inventory, each Playbook Host is matched to an SSH Alias in ~/.ssh/config
+and a Generated Inventory is passed to ansible-playbook. With --inventory (-i), that
+Explicit Inventory is passed instead, and Host Resolution and the SSH pre-flight
+check are skipped. Either way the 'inventory' setting in ansible.cfg is ignored.
+
+Supply the inventory only through --inventory: -i or --inventory after '--', or in
+ansible.default_args in the config, stops the run.`,
+		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			playbookFile := args[0]
 			var extraArgs []string
@@ -88,10 +96,14 @@ func resolveProvider(cfg config.Config) (credentials.Provider, error) {
 func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration) error {
 	cfg, _ := config.Load(configFilePath())
 
+	if err := checkNoInventoryArgs(cfg.Ansible.DefaultArgs, extraArgs); err != nil {
+		return err
+	}
+
 	// Phase 1: Playbook Discovery
 	fmt.Println("\033[36m◇\033[0m  \033[1m\033[97mPlaybook Discovery\033[0m")
 
-	pb, err := playbook.Parse(playbookFile)
+	pb, err := parsePlaybook(playbookFile)
 	if err != nil {
 		return err
 	}
@@ -100,26 +112,33 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 	// Phase 2: Host Resolution
 	fmt.Println("\n\033[36m◇\033[0m  \033[1m\033[97mHost Resolution\033[0m")
 
-	sshHosts, err := ssh.ParseConfig(sshConfigPath())
-	if err != nil {
-		return fmt.Errorf("parsing SSH config: %w", err)
-	}
-
 	var allResolved []ssh.ResolvedHost
-	for _, hostAlias := range pb.Hosts {
-		resolved, err := ssh.Resolve(hostAlias, sshHosts, cfg.EffectiveDefaultUser())
+	if explicitInventory != "" {
+		fmt.Printf("\033[2m\033[90m│\033[0m  Skipped: Explicit Inventory %s supplies the hosts\n", explicitInventory)
+	} else {
+		sshHosts, err := ssh.ParseConfig(sshConfigPath())
 		if err != nil {
-			return fmt.Errorf("resolving host '%s': %w", hostAlias, err)
+			return fmt.Errorf("parsing SSH config: %w", err)
 		}
-		allResolved = append(allResolved, resolved...)
-		for _, r := range resolved {
-			fmt.Printf("\033[2m\033[90m│\033[0m  %s → %s\n", hostAlias, r.Hostname)
+
+		for _, hostAlias := range pb.Hosts {
+			resolved, err := ssh.Resolve(hostAlias, sshHosts, cfg.EffectiveDefaultUser())
+			if err != nil {
+				return fmt.Errorf("resolving host '%s': %w", hostAlias, err)
+			}
+			allResolved = append(allResolved, resolved...)
+			for _, r := range resolved {
+				fmt.Printf("\033[2m\033[90m│\033[0m  %s → %s\n", hostAlias, r.Hostname)
+			}
 		}
+		fmt.Printf("\033[2m\033[90m│\033[0m  \033[97m%d host(s) resolved\033[0m \033[32m✓\033[0m\n", len(allResolved))
 	}
-	fmt.Printf("\033[2m\033[90m│\033[0m  \033[97m%d host(s) resolved\033[0m \033[32m✓\033[0m\n", len(allResolved))
 
 	// Phase 3: SSH Pre-flight
-	if !noPreflight {
+	if explicitInventory != "" {
+		fmt.Println("\n\033[36m◇\033[0m  \033[1m\033[97mSSH Pre-flight\033[0m")
+		fmt.Println("\033[2m\033[90m│\033[0m  Skipped: hosts come from the Explicit Inventory, not the SSH config")
+	} else if !noPreflight {
 		fmt.Println("\n\033[36m◇\033[0m  \033[1m\033[97mSSH Pre-flight\033[0m")
 
 		results := ssh.RunPreflight(allResolved, timeout)
@@ -152,13 +171,17 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 	}
 	fmt.Printf("\033[2m\033[90m│\033[0m  Provider: %s\n", providerName)
 
-	// Phase 5: Generate inventory
-	groupName := strings.Join(pb.Hosts, "_")
-	invPath, cleanup, err := inventory.Generate(groupName, allResolved)
-	if err != nil {
-		return fmt.Errorf("generating inventory: %w", err)
+	// Phase 5: Generate inventory, unless an Explicit Inventory is in use
+	invPath := explicitInventory
+	if invPath == "" {
+		groupName := strings.Join(pb.Hosts, "_")
+		generated, cleanup, err := inventory.Generate(groupName, allResolved)
+		if err != nil {
+			return fmt.Errorf("generating inventory: %w", err)
+		}
+		defer cleanup()
+		invPath = generated
 	}
-	defer cleanup()
 
 	// Phase 6: Run ansible-playbook
 	fmt.Println("\n\033[32m■\033[0m  \033[32mHanding off to ansible-playbook...\033[0m")

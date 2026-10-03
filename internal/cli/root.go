@@ -6,7 +6,6 @@ import (
 
 	"github.com/geraldcsoftware/playbook/internal/config"
 	"github.com/geraldcsoftware/playbook/internal/tui"
-	"github.com/geraldcsoftware/playbook/pkg/playbook"
 	"github.com/geraldcsoftware/playbook/pkg/ssh"
 	"github.com/spf13/cobra"
 )
@@ -30,28 +29,34 @@ func newRootCmd() *cobra.Command {
 
 			cfg, _ := config.Load(configFilePath())
 
-			pb, err := playbook.Parse(args[0])
+			if err := checkNoInventoryArgs(cfg.Ansible.DefaultArgs, nil); err != nil {
+				return err
+			}
+
+			pb, err := parsePlaybook(args[0])
 			if err != nil {
 				return err
 			}
 
-			sshHosts, err := ssh.ParseConfig(sshConfigPath())
-			if err != nil {
-				return fmt.Errorf("parsing SSH config: %w", err)
-			}
-
 			var resolved []ssh.ResolvedHost
 			var resolveErrors []string
-			for _, hostAlias := range pb.Hosts {
-				r, err := ssh.Resolve(hostAlias, sshHosts, cfg.EffectiveDefaultUser())
+			if explicitInventory == "" {
+				sshHosts, err := ssh.ParseConfig(sshConfigPath())
 				if err != nil {
-					resolveErrors = append(resolveErrors, fmt.Sprintf("%s: %v", hostAlias, err))
-					continue
+					return fmt.Errorf("parsing SSH config: %w", err)
 				}
-				resolved = append(resolved, r...)
+
+				for _, hostAlias := range pb.Hosts {
+					r, err := ssh.Resolve(hostAlias, sshHosts, cfg.EffectiveDefaultUser())
+					if err != nil {
+						resolveErrors = append(resolveErrors, fmt.Sprintf("%s: %v", hostAlias, err))
+						continue
+					}
+					resolved = append(resolved, r...)
+				}
 			}
 
-			action, err := tui.Run(pb, resolved, resolveErrors)
+			action, err := tui.Run(pb, resolved, resolveErrors, explicitInventory)
 			if err != nil {
 				return err
 			}
@@ -78,6 +83,7 @@ func newRootCmd() *cobra.Command {
 	cmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default: ~/.config/playbook/config.yaml)")
 	cmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "increase output detail")
 	cmd.PersistentFlags().BoolVar(&noPreflight, "no-preflight", false, "skip SSH reachability checks")
+	cmd.PersistentFlags().StringVarP(&explicitInventory, "inventory", "i", "", inventoryFlagUsage)
 
 	cmd.AddCommand(newDoctorCmd())
 	cmd.AddCommand(newHostsCmd())

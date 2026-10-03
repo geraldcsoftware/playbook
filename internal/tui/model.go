@@ -28,23 +28,28 @@ type Model struct {
 	playbook      playbook.Playbook
 	resolvedHosts []ssh.ResolvedHost
 	resolveErrors []string
+	inventory     string
 	menuItems     []menuItem
 	cursor        int
 	chosen        Action
 }
 
-func NewModel(pb playbook.Playbook, hosts []ssh.ResolvedHost, errors []string) Model {
+// NewModel builds the screen for pb. A non-empty explicitInventory names the
+// Explicit Inventory the run will use, in place of resolved hosts.
+func NewModel(pb playbook.Playbook, hosts []ssh.ResolvedHost, errors []string, explicitInventory string) Model {
+	items := []menuItem{{"Run playbook", ActionRun}}
+	if explicitInventory == "" {
+		items = append(items, menuItem{"View hosts", ActionViewHosts})
+	}
+	items = append(items, menuItem{"Run doctor", ActionDoctor}, menuItem{"Quit", ActionQuit})
+
 	return Model{
 		playbook:      pb,
 		resolvedHosts: hosts,
 		resolveErrors: errors,
-		menuItems: []menuItem{
-			{"Run playbook", ActionRun},
-			{"View hosts", ActionViewHosts},
-			{"Run doctor", ActionDoctor},
-			{"Quit", ActionQuit},
-		},
-		chosen: ActionNone,
+		inventory:     explicitInventory,
+		menuItems:     items,
+		chosen:        ActionNone,
 	}
 }
 
@@ -90,6 +95,10 @@ func (m Model) View() string {
 	s += labelStyle.Render("  Playbook:  ") + valueStyle.Render(m.playbook.Name) + "\n"
 	s += labelStyle.Render("  File:      ") + valueStyle.Render(m.playbook.File) + "\n"
 
+	if m.inventory != "" {
+		s += labelStyle.Render("  Inventory: ") + valueStyle.Render(m.inventory) + "\n"
+		s += labelStyle.Render("             ") + labelStyle.Render("Explicit Inventory in use; Host Resolution skipped") + "\n"
+	}
 	if len(m.resolvedHosts) > 0 {
 		s += labelStyle.Render("  Hosts:     ") + valueStyle.Render(m.resolvedHosts[0].Hostname) + "\n"
 		for _, h := range m.resolvedHosts[1:] {
@@ -118,8 +127,8 @@ func (m Model) View() string {
 	return s
 }
 
-func Run(pb playbook.Playbook, hosts []ssh.ResolvedHost, errors []string) (Action, error) {
-	m := NewModel(pb, hosts, errors)
+func Run(pb playbook.Playbook, hosts []ssh.ResolvedHost, errors []string, explicitInventory string) (Action, error) {
+	m := NewModel(pb, hosts, errors, explicitInventory)
 	p := tea.NewProgram(m)
 	finalModel, err := p.Run()
 	if err != nil {

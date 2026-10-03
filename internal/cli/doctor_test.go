@@ -1,38 +1,11 @@
 package cli
 
 import (
-	"io"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 )
-
-// captureStdout runs fn with os.Stdout redirected and returns what it
-// printed, since commands write to os.Stdout directly.
-func captureStdout(t *testing.T, fn func() error) (string, error) {
-	t.Helper()
-
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("creating pipe: %v", err)
-	}
-	orig := os.Stdout
-	os.Stdout = w
-	defer func() { os.Stdout = orig }()
-
-	out := make(chan string)
-	go func() {
-		data, _ := io.ReadAll(r)
-		out <- string(data)
-	}()
-
-	runErr := fn()
-	w.Close()
-	os.Stdout = orig
-	return <-out, runErr
-}
 
 // startAACListener runs a stand-in process whose command line contains
 // "aac listen", so doctor's listener check passes, and stops it when the

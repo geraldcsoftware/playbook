@@ -14,7 +14,19 @@ type Playbook struct {
 	File  string
 }
 
+// Parse reads a playbook for Host Resolution, rejecting Playbook Hosts that
+// are Ansible patterns rather than names an SSH Alias could match.
 func Parse(path string) (Playbook, error) {
+	return parse(path, validateHostPattern)
+}
+
+// ParseAnyPattern reads a playbook whose hosts come from an Explicit
+// Inventory, so any Ansible host pattern is accepted.
+func ParseAnyPattern(path string) (Playbook, error) {
+	return parse(path, func(string) error { return nil })
+}
+
+func parse(path string, validate func(string) error) (Playbook, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Playbook{}, fmt.Errorf("reading playbook: %w", err)
@@ -32,7 +44,7 @@ func Parse(path string) (Playbook, error) {
 	first := raw[0]
 	name, _ := first["name"].(string)
 
-	hosts, err := extractHosts(first["hosts"])
+	hosts, err := extractHosts(first["hosts"], validate)
 	if err != nil {
 		return Playbook{}, err
 	}
@@ -44,14 +56,14 @@ func Parse(path string) (Playbook, error) {
 	}, nil
 }
 
-func extractHosts(v interface{}) ([]string, error) {
+func extractHosts(v interface{}, validate func(string) error) ([]string, error) {
 	if v == nil {
 		return nil, fmt.Errorf("playbook has no 'hosts' field")
 	}
 
 	switch val := v.(type) {
 	case string:
-		if err := validateHostPattern(val); err != nil {
+		if err := validate(val); err != nil {
 			return nil, err
 		}
 		return []string{val}, nil
@@ -62,7 +74,7 @@ func extractHosts(v interface{}) ([]string, error) {
 			if !ok {
 				return nil, fmt.Errorf("hosts list contains non-string value: %v", item)
 			}
-			if err := validateHostPattern(s); err != nil {
+			if err := validate(s); err != nil {
 				return nil, err
 			}
 			hosts = append(hosts, s)
