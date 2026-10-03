@@ -51,11 +51,18 @@ func (f HostResolutionFailure) Error() string {
 // otherwise it is defaultUser. It returns a Target for every Playbook Host
 // that resolved and a failure for every one that did not, so all failures
 // can be reported together; a run must not proceed while any failure
-// exists.
+// exists. A Playbook Host listed more than once yields one Target, or one
+// failure, and is looked up once: under exact matching it names a single
+// SSH Alias.
 func Resolve(playbookHosts []string, config Config, lookup EffectiveSettingsLookup, defaultUser string) ([]ResolvedHost, []HostResolutionFailure) {
 	var targets []ResolvedHost
 	var failures []HostResolutionFailure
+	seen := map[string]bool{}
 	for _, ph := range playbookHosts {
+		if seen[ph] {
+			continue
+		}
+		seen[ph] = true
 		h, ok := matchAlias(ph, config.Hosts)
 		if !ok {
 			failures = append(failures, HostResolutionFailure{

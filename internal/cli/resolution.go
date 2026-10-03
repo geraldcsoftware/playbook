@@ -17,6 +17,6 @@ func resolveHosts(pb playbook.Playbook, cfg config.Config) ([]ssh.ResolvedHost, 
 	if err != nil {
 		return nil, nil, fmt.Errorf("parsing SSH config: %w", err)
 	}
-	targets, failures := ssh.Resolve(pb.Hosts, sshConfig, ssh.OpenSSHLookup{}, cfg.EffectiveDefaultUser())
+	targets, failures := ssh.Resolve(pb.Hosts(), sshConfig, ssh.OpenSSHLookup{}, cfg.EffectiveDefaultUser())
 	return targets, failures, nil
 }

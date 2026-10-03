@@ -139,7 +139,7 @@ func TestInventoryFlag_NotesAnsibleCfgIgnored(t *testing.T) {
 }
 
 func TestInteractiveScreen_ShowsExplicitInventory(t *testing.T) {
-	pb := playbook.Playbook{Name: "Web", File: "site.yml", Hosts: []string{"all"}}
+	pb := playbook.Playbook{Name: "Web", File: "site.yml", Plays: []playbook.Play{{Name: "Web", Hosts: []string{"all"}}}}
 	view := tui.NewModel(pb, nil, nil, "inv.ini").View()
 
 	if !strings.Contains(view, "inv.ini") || !strings.Contains(view, "Explicit Inventory") {
