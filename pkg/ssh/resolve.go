@@ -25,19 +25,77 @@ const maxSuggestionDistance = 2
 // maxSuggestions caps how many SSH Aliases a failure suggests.
 const maxSuggestions = 3
 
-// HostResolutionFailure is a Playbook Host that Host Resolution could not
-// turn into a Target. Either it matched no SSH Alias, and Suggestions lists
-// the nearest SSH Aliases, nearest first; or it matched one whose effective
-// settings could not be read, and Err says why.
+// FailureKind says why Host Resolution could not produce a run's Targets.
+type FailureKind int
+
+const (
+	// NoMatchingAlias: a Playbook Host equals no SSH Alias; Suggestions
+	// lists the nearest SSH Aliases, nearest first.
+	NoMatchingAlias FailureKind = iota
+	// SettingsUnreadable: a Playbook Host matched an SSH Alias whose
+	// effective settings could not be read; Err says why.
+	SettingsUnreadable
+	// HostPattern: a Playbook Host is an Ansible host pattern, such as
+	// "all" or "web:&prod", rather than a name.
+	HostPattern
+	// TemplatedHost: a Playbook Host is a template, such as "{{ target }}",
+	// whose value is known only when the play runs.
+	TemplatedHost
+	// ImportedPlaybook: the playbook imports Import with import_playbook,
+	// whose plays Host Resolution does not read.
+	ImportedPlaybook
+	// SSHHostRepeatedInPlay: PlaybookHost and SameSSHHostAs, both listed in
+	// Play, are SSH Aliases of one SSH Host.
+	SSHHostRepeatedInPlay
+)
+
+// HostResolutionFailure is one reason Host Resolution could not turn a
+// playbook into Targets; Kind says which, and so which other fields are set.
+// A run must not proceed while any failure exists.
 type HostResolutionFailure struct {
+	Kind         FailureKind
 	PlaybookHost string
 	Suggestions  []string
 	Err          error
+	// Import is the imported playbook, for ImportedPlaybook.
+	Import string
+	// Play is the play's name, if it has one, and PlayNumber its position
+	// in the playbook, counting from one; SameSSHHostAs is the Playbook
+	// Host listed before PlaybookHost. All are for SSHHostRepeatedInPlay.
+	Play          string
+	PlayNumber    int
+	SameSSHHostAs string
+}
+
+// Subject names what failed, for display ahead of the Error message: the
+// Playbook Host or Hosts concerned, or the import_playbook entry.
+func (f HostResolutionFailure) Subject() string {
+	switch f.Kind {
+	case ImportedPlaybook:
+		return "import_playbook " + f.Import
+	case SSHHostRepeatedInPlay:
+		return f.SameSSHHostAs + ", " + f.PlaybookHost
+	default:
+		return f.PlaybookHost
+	}
 }
 
 func (f HostResolutionFailure) Error() string {
-	if f.Err != nil {
+	switch f.Kind {
+	case SettingsUnreadable:
 		return fmt.Sprintf("could not read the SSH settings for SSH Alias '%s': %v — fix its SSH configuration or pass --inventory", f.PlaybookHost, f.Err)
+	case HostPattern:
+		return fmt.Sprintf("'%s' is an Ansible host pattern, which Host Resolution cannot match to an SSH Alias — name SSH Aliases, or pass --inventory to run against an Explicit Inventory", f.PlaybookHost)
+	case TemplatedHost:
+		return fmt.Sprintf("'%s' is templated, so its value is not known until the play runs — name SSH Aliases, or pass --inventory to run against an Explicit Inventory", f.PlaybookHost)
+	case ImportedPlaybook:
+		return fmt.Sprintf("the playbook imports '%s', and imported playbooks need --inventory for now", f.Import)
+	case SSHHostRepeatedInPlay:
+		play := fmt.Sprintf("%d", f.PlayNumber)
+		if f.Play != "" {
+			play = fmt.Sprintf("'%s'", f.Play)
+		}
+		return fmt.Sprintf("'%s' and '%s' in play %s are SSH Aliases of the same SSH Host — list it once in the play, or pass --inventory", f.SameSSHHostAs, f.PlaybookHost, play)
 	}
 	msg := fmt.Sprintf("no SSH Alias named '%s' in ~/.ssh/config", f.PlaybookHost)
 	if len(f.Suggestions) > 0 {
@@ -75,7 +133,7 @@ func Resolve(playbookHosts []string, config Config, lookup EffectiveSettingsLook
 		}
 		settings, err := lookup.EffectiveSettings(ph)
 		if err != nil {
-			failures = append(failures, HostResolutionFailure{PlaybookHost: ph, Err: err})
+			failures = append(failures, HostResolutionFailure{Kind: SettingsUnreadable, PlaybookHost: ph, Err: err})
 			continue
 		}
 		user := defaultUser

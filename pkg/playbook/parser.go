@@ -47,19 +47,11 @@ func (p Playbook) Hosts() []string {
 // rather than a play.
 var importKeys = []string{"import_playbook", "ansible.builtin.import_playbook"}
 
-// Parse reads a playbook for Host Resolution, rejecting Playbook Hosts that
-// are Ansible patterns rather than names an SSH Alias could match.
+// Parse reads a playbook, returning its Playbook Hosts as written. It does
+// not judge whether Host Resolution can match them: patterns, templates and
+// imports are accepted, since an Explicit Inventory may supply the hosts,
+// and Host Resolution reports them otherwise.
 func Parse(path string) (Playbook, error) {
-	return parse(path, validateHostPattern)
-}
-
-// ParseAnyPattern reads a playbook whose hosts come from an Explicit
-// Inventory, so any Ansible host pattern is accepted.
-func ParseAnyPattern(path string) (Playbook, error) {
-	return parse(path, func(string) error { return nil })
-}
-
-func parse(path string, validate func(string) error) (Playbook, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return Playbook{}, fmt.Errorf("reading playbook: %w", err)
@@ -77,17 +69,19 @@ func parse(path string, validate func(string) error) (Playbook, error) {
 			continue
 		}
 		name, _ := entry["name"].(string)
-		hosts, err := extractHosts(entry["hosts"], validate)
+		hosts, err := extractHosts(entry["hosts"])
 		if err != nil {
 			return Playbook{}, err
 		}
 		pb.Plays = append(pb.Plays, Play{Name: name, Hosts: hosts})
 	}
 
-	if len(pb.Plays) == 0 {
+	if len(pb.Plays) == 0 && len(pb.Imports) == 0 {
 		return Playbook{}, fmt.Errorf("playbook contains no plays")
 	}
-	pb.Name = pb.Plays[0].Name
+	if len(pb.Plays) > 0 {
+		pb.Name = pb.Plays[0].Name
+	}
 	return pb, nil
 }
 
@@ -106,7 +100,7 @@ func importTarget(entry map[string]interface{}) (string, bool) {
 	return "", false
 }
 
-func extractHosts(v interface{}, validate func(string) error) ([]string, error) {
+func extractHosts(v interface{}) ([]string, error) {
 	if v == nil {
 		return nil, fmt.Errorf("playbook has no 'hosts' field")
 	}
@@ -129,36 +123,53 @@ func extractHosts(v interface{}, validate func(string) error) ([]string, error) 
 
 	var hosts []string
 	for _, value := range values {
-		for _, h := range splitHosts(value) {
-			if err := validate(h); err != nil {
-				return nil, err
-			}
-			hosts = append(hosts, h)
-		}
+		hosts = append(hosts, splitHosts(value)...)
 	}
 	return hosts, nil
 }
 
 // splitHosts splits a hosts value such as "web, db" on commas, as Ansible
-// does, dropping surrounding spaces and empty parts.
+// does, dropping surrounding spaces and empty parts. A value that is
+// templated, or that holds an Ansible host pattern, is kept whole, so that
+// it is reported as the operator wrote it rather than in fragments.
 func splitHosts(value string) []string {
-	var hosts []string
-	for _, part := range strings.Split(value, ",") {
-		if part = strings.TrimSpace(part); part != "" {
-			hosts = append(hosts, part)
-		}
+	if IsTemplate(value) || IsPattern(value) {
+		return []string{strings.TrimSpace(value)}
 	}
-	return hosts
+	return hostParts(value)
 }
 
-func validateHostPattern(host string) error {
-	if host == "all" {
-		return fmt.Errorf("host pattern 'all' is not supported — this tool resolves individual hosts from ~/.ssh/config")
-	}
-	for _, ch := range []string{":", "&", "!", "*"} {
-		if strings.Contains(host, ch) {
-			return fmt.Errorf("host pattern '%s' contains '%s' — Ansible patterns are not supported, use explicit hostnames", host, ch)
+// hostParts splits value on commas, dropping surrounding spaces and empty
+// parts.
+func hostParts(value string) []string {
+	var parts []string
+	for _, part := range strings.Split(value, ",") {
+		if part = strings.TrimSpace(part); part != "" {
+			parts = append(parts, part)
 		}
 	}
-	return nil
+	return parts
+}
+
+// patternChars are the characters that make a Playbook Host an Ansible host
+// pattern (a wildcard, a group operator, a regular expression or a range)
+// rather than a name an SSH Alias could equal.
+const patternChars = "*?:&!~[]"
+
+// IsTemplate reports whether a Playbook Host is a Jinja template, such as
+// "{{ target }}", whose value is known only when the play runs.
+func IsTemplate(host string) bool {
+	return strings.Contains(host, "{{")
+}
+
+// IsPattern reports whether a Playbook Host is an Ansible host pattern
+// rather than a name: any of its comma-separated parts is "all" or contains
+// a wildcard, a group operator, a regular expression marker or a range.
+func IsPattern(host string) bool {
+	for _, part := range hostParts(host) {
+		if part == "all" || strings.ContainsAny(part, patternChars) {
+			return true
+		}
+	}
+	return false
 }

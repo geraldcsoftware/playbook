@@ -3,8 +3,6 @@ package cli
 import (
 	"fmt"
 	"strings"
-
-	"github.com/geraldcsoftware/playbook/pkg/playbook"
 )
 
 // explicitInventory is the Explicit Inventory supplied with the global
@@ -12,15 +10,6 @@ import (
 var explicitInventory string
 
 const inventoryFlagUsage = "Explicit Inventory to run against; skips Host Resolution and the SSH pre-flight check (the 'inventory' setting in ansible.cfg is always ignored)"
-
-// parsePlaybook reads the playbook, accepting any Ansible host pattern when
-// an Explicit Inventory supplies the hosts.
-func parsePlaybook(path string) (playbook.Playbook, error) {
-	if explicitInventory != "" {
-		return playbook.ParseAnyPattern(path)
-	}
-	return playbook.Parse(path)
-}
 
 // checkNoInventoryArgs refuses an inventory passed to ansible-playbook other
 // than through --inventory, so the inventory a run uses is never ambiguous.
