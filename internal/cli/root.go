@@ -43,7 +43,7 @@ func newRootCmd() *cobra.Command {
 			var resolved []ssh.ResolvedHost
 			var resolveErrors []string
 			for _, hostAlias := range pb.Hosts {
-				r, err := ssh.Resolve(hostAlias, sshHosts, cfg.DefaultUser)
+				r, err := ssh.Resolve(hostAlias, sshHosts, cfg.EffectiveDefaultUser())
 				if err != nil {
 					resolveErrors = append(resolveErrors, fmt.Sprintf("%s: %v", hostAlias, err))
 					continue
