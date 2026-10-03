@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/geraldcsoftware/playbook/internal/config"
-	"github.com/geraldcsoftware/playbook/pkg/playbook"
 	"github.com/geraldcsoftware/playbook/pkg/ssh"
 	"github.com/spf13/cobra"
 )
@@ -146,18 +145,23 @@ func newHostsResolveCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, _ := config.Load(configFilePath())
 
-			pb, err := playbook.Parse(args[0])
-			if err != nil {
-				return err
-			}
-
-			sshHosts, err := ssh.ParseConfig(sshConfigPath())
+			pb, err := parsePlaybook(args[0])
 			if err != nil {
 				return err
 			}
 
 			fmt.Printf("Playbook: %s\n", pb.Name)
 			fmt.Printf("File:     %s\n\n", pb.File)
+
+			if explicitInventory != "" {
+				fmt.Printf("  Host Resolution skipped: Explicit Inventory %s supplies the hosts\n", explicitInventory)
+				return nil
+			}
+
+			sshHosts, err := ssh.ParseConfig(sshConfigPath())
+			if err != nil {
+				return err
+			}
 
 			for _, hostAlias := range pb.Hosts {
 				resolved, err := ssh.Resolve(hostAlias, sshHosts, cfg.DefaultUser)

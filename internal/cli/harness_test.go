@@ -66,6 +66,7 @@ func resetFlags() {
 	cfgFile = ""
 	verbose = false
 	noPreflight = false
+	explicitInventory = ""
 	credentialProvider = ""
 	secretName = ""
 	accessToken = ""
