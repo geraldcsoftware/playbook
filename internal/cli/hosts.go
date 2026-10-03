@@ -42,9 +42,9 @@ func newHostsListCmd() *cobra.Command {
 			for _, h := range hosts {
 				hostname := h.HostName
 				if hostname == "" {
-					hostname = h.Alias
+					hostname = h.Aliases[0]
 				}
-				fmt.Printf("  %s → %s (user: %s, port: %d)\n", h.Alias, hostname, h.User, h.Port)
+				fmt.Printf("  %s → %s (user: %s, port: %d)\n", strings.Join(h.Aliases, ", "), hostname, h.User, h.Port)
 			}
 			fmt.Printf("\n%d hosts found\n", len(hosts))
 			return nil

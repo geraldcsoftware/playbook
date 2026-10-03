@@ -5,9 +5,9 @@ import (
 )
 
 var testHosts = []SSHHost{
-	{Alias: "db-prod.eus.v.co.zw", HostName: "db-prod.eus.v.co.zw", User: "gchifanzwa", IdentityFile: "~/.ssh/id_rsa_db_prod", Port: 22},
-	{Alias: "db-staging.eus.v.co.zw", HostName: "db-staging.eus.v.co.zw", User: "gchifanzwa", IdentityFile: "~/.ssh/id_rsa_db_staging", Port: 22},
-	{Alias: "web-01.eus.v.co.zw", HostName: "web-01.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/id_ed25519_web01", Port: 22},
+	{Aliases: []string{"db-prod.eus.v.co.zw"}, HostName: "db-prod.eus.v.co.zw", User: "gchifanzwa", IdentityFile: "~/.ssh/id_rsa_db_prod", Port: 22},
+	{Aliases: []string{"db-staging.eus.v.co.zw"}, HostName: "db-staging.eus.v.co.zw", User: "gchifanzwa", IdentityFile: "~/.ssh/id_rsa_db_staging", Port: 22},
+	{Aliases: []string{"web-01.eus.v.co.zw"}, HostName: "web-01.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/id_ed25519_web01", Port: 22},
 }
 
 func TestResolve_ExactMatch(t *testing.T) {
@@ -69,7 +69,7 @@ func TestResolve_FallbackUser(t *testing.T) {
 
 func TestResolve_DefaultUser(t *testing.T) {
 	hosts := []SSHHost{
-		{Alias: "bare-host", HostName: "bare-host.example.com", Port: 22},
+		{Aliases: []string{"bare-host"}, HostName: "bare-host.example.com", Port: 22},
 	}
 	results, err := Resolve("bare-host", hosts, "fallback")
 	if err != nil {
@@ -77,5 +77,30 @@ func TestResolve_DefaultUser(t *testing.T) {
 	}
 	if results[0].User != "fallback" {
 		t.Errorf("expected fallback user, got %s", results[0].User)
+	}
+}
+
+func TestResolve_AnyAliasOfAnSSHHost(t *testing.T) {
+	hosts := []SSHHost{
+		{Aliases: []string{"web", "web-prod"}, HostName: "10.0.0.7", Port: 22},
+		{Aliases: []string{"db"}, HostName: "10.0.0.5", Port: 22},
+	}
+	for _, query := range []string{"web", "web-prod"} {
+		results, err := Resolve(query, hosts, "fallback")
+		if err != nil {
+			t.Fatalf("Resolve(%q): %v", query, err)
+		}
+		if results[0].Alias != query || results[0].Hostname != "10.0.0.7" {
+			t.Errorf("Resolve(%q) = %+v", query, results[0])
+		}
+	}
+
+	// Several aliases of one SSH Host containing the query are not ambiguous.
+	results, err := Resolve("we", hosts, "fallback")
+	if err != nil {
+		t.Fatalf("Resolve(we): %v", err)
+	}
+	if results[0].Alias != "web" {
+		t.Errorf("expected the matching SSH Alias web, got %q", results[0].Alias)
 	}
 }

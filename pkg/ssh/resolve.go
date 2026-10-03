@@ -22,17 +22,27 @@ func (e *AmbiguousMatchError) Error() string {
 	return fmt.Sprintf("ambiguous host '%s' matches multiple entries: %s — be more specific", e.Query, strings.Join(e.Candidates, ", "))
 }
 
+// Resolve matches a Playbook Host to an SSH Host by any of its SSH Aliases:
+// an exact match wins, otherwise a unique SSH Host with an alias containing
+// it. The ResolvedHost carries the SSH Alias that matched.
 func Resolve(alias string, hosts []SSHHost, defaultUser string) ([]ResolvedHost, error) {
 	for _, h := range hosts {
-		if h.Alias == alias {
-			return []ResolvedHost{toResolved(alias, h, defaultUser)}, nil
+		for _, a := range h.Aliases {
+			if a == alias {
+				return []ResolvedHost{toResolved(a, h, defaultUser)}, nil
+			}
 		}
 	}
 
 	var candidates []SSHHost
+	var matched []string
 	for _, h := range hosts {
-		if strings.Contains(h.Alias, alias) {
-			candidates = append(candidates, h)
+		for _, a := range h.Aliases {
+			if strings.Contains(a, alias) {
+				candidates = append(candidates, h)
+				matched = append(matched, a)
+				break
+			}
 		}
 	}
 
@@ -40,20 +50,16 @@ func Resolve(alias string, hosts []SSHHost, defaultUser string) ([]ResolvedHost,
 	case 0:
 		return nil, fmt.Errorf("no SSH config entry matches '%s' — add a Host entry for it to ~/.ssh/config", alias)
 	case 1:
-		return []ResolvedHost{toResolved(alias, candidates[0], defaultUser)}, nil
+		return []ResolvedHost{toResolved(matched[0], candidates[0], defaultUser)}, nil
 	default:
-		names := make([]string, len(candidates))
-		for i, c := range candidates {
-			names[i] = c.Alias
-		}
-		return nil, &AmbiguousMatchError{Query: alias, Candidates: names}
+		return nil, &AmbiguousMatchError{Query: alias, Candidates: matched}
 	}
 }
 
 func toResolved(alias string, h SSHHost, defaultUser string) ResolvedHost {
 	hostname := h.HostName
 	if hostname == "" {
-		hostname = h.Alias
+		hostname = alias
 	}
 	user := h.User
 	if user == "" {

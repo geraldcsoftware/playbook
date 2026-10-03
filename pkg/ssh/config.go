@@ -4,27 +4,49 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 )
 
+// SSHHost is one Host entry of the operator's SSH client configuration,
+// together with the connection settings that apply to it. Aliases holds its
+// SSH Aliases: every literal name on its Host line, in order.
 type SSHHost struct {
-	Alias        string
+	Aliases      []string
 	HostName     string
 	User         string
 	IdentityFile string
 	Port         int
 }
 
+// maxIncludeDepth bounds nested Include directives, matching OpenSSH's own
+// limit, so an Include loop fails rather than recursing forever.
+const maxIncludeDepth = 16
+
+// ParseConfig reads the SSH client configuration at path, following Include
+// directives, and returns its SSH Hosts in file order.
 func ParseConfig(path string) ([]SSHHost, error) {
+	p := &configParser{current: -1}
+	if err := p.parseFile(path, 0); err != nil {
+		return nil, err
+	}
+	return p.hosts, nil
+}
+
+type configParser struct {
+	hosts []SSHHost
+	// current indexes the SSH Host whose settings are being read, or is -1
+	// when outside any SSH Host (top level or a wildcard-only Host line).
+	current int
+}
+
+func (p *configParser) parseFile(path string, depth int) error {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, fmt.Errorf("opening ssh config: %w", err)
+		return fmt.Errorf("opening ssh config: %w", err)
 	}
 	defer f.Close()
-
-	var hosts []SSHHost
-	var current *SSHHost
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
@@ -38,31 +60,32 @@ func ParseConfig(path string) ([]SSHHost, error) {
 		var keyword, value string
 		if idx := strings.IndexAny(line, " \t="); idx > 0 {
 			keyword = strings.TrimSpace(line[:idx])
-			value = strings.TrimSpace(line[idx+1:])
+			value = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line[idx+1:]), "="))
 		} else {
 			continue
 		}
 
-		if strings.EqualFold(keyword, "Host") {
-			if current != nil {
-				hosts = append(hosts, *current)
-			}
-
-			if strings.Contains(value, "*") || strings.Contains(value, "?") {
-				current = nil
+		switch strings.ToLower(keyword) {
+		case "host":
+			aliases := literalNames(splitArgs(value))
+			if len(aliases) == 0 {
+				p.current = -1
 				continue
 			}
-
-			current = &SSHHost{
-				Alias: value,
-				Port:  22,
+			p.hosts = append(p.hosts, SSHHost{Aliases: aliases, Port: 22})
+			p.current = len(p.hosts) - 1
+			continue
+		case "include":
+			if err := p.include(splitArgs(value), depth); err != nil {
+				return err
 			}
 			continue
 		}
 
-		if current == nil {
+		if p.current < 0 {
 			continue
 		}
+		current := &p.hosts[p.current]
 
 		switch strings.ToLower(keyword) {
 		case "hostname":
@@ -72,19 +95,96 @@ func ParseConfig(path string) ([]SSHHost, error) {
 		case "identityfile":
 			current.IdentityFile = value
 		case "port":
-			if p, err := strconv.Atoi(value); err == nil {
-				current.Port = p
+			if port, err := strconv.Atoi(value); err == nil {
+				current.Port = port
 			}
 		}
 	}
 
-	if current != nil {
-		hosts = append(hosts, *current)
-	}
-
 	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("reading ssh config: %w", err)
+		return fmt.Errorf("reading ssh config: %w", err)
+	}
+	return nil
+}
+
+// include reads each file an Include directive names. As in OpenSSH,
+// relative paths are taken from ~/.ssh, globs are expanded, files that do
+// not exist are skipped, and the enclosing Host block resumes afterwards.
+func (p *configParser) include(patterns []string, depth int) error {
+	if depth+1 > maxIncludeDepth {
+		return fmt.Errorf("reading ssh config: too many nested Include directives (limit %d)", maxIncludeDepth)
 	}
 
-	return hosts, nil
+	enclosing := p.current
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(includePath(pattern))
+		if err != nil {
+			continue
+		}
+		for _, match := range matches {
+			if info, err := os.Stat(match); err != nil || info.IsDir() {
+				continue
+			}
+			if err := p.parseFile(match, depth+1); err != nil {
+				return err
+			}
+		}
+	}
+	p.current = enclosing
+	return nil
+}
+
+func includePath(pattern string) string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return pattern
+	}
+	if pattern == "~" || strings.HasPrefix(pattern, "~/") {
+		return filepath.Join(home, pattern[1:])
+	}
+	if filepath.IsAbs(pattern) {
+		return pattern
+	}
+	return filepath.Join(home, ".ssh", pattern)
+}
+
+// literalNames keeps the names that can be SSH Aliases, dropping patterns
+// containing wildcards and negated names.
+func literalNames(names []string) []string {
+	var literal []string
+	for _, n := range names {
+		if strings.ContainsAny(n, "*?!") {
+			continue
+		}
+		literal = append(literal, n)
+	}
+	return literal
+}
+
+// splitArgs splits a directive's arguments on whitespace, treating a
+// double-quoted run as one argument.
+func splitArgs(value string) []string {
+	var args []string
+	var b strings.Builder
+	inQuotes, inArg := false, false
+	for _, r := range value {
+		switch {
+		case r == '"':
+			inQuotes = !inQuotes
+			inArg = true
+		case (r == ' ' || r == '\t') && !inQuotes:
+			if inArg {
+				args = append(args, b.String())
+				b.Reset()
+				inArg = false
+			}
+		default:
+			b.WriteRune(r)
+			inArg = true
+		}
+	}
+	if inArg {
+		args = append(args, b.String())
+	}
+	return args
 }
