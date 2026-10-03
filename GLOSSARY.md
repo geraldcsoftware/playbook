@@ -20,6 +20,10 @@ _Avoid_: alias (unqualified), hostname
 Matching each Playbook Host of every play declared in the playbook to exactly one SSH Alias, to produce the Targets of a run that has no Explicit Inventory.
 _Avoid_: host lookup, host matching
 
+**Default User**:
+The account a Target is connected as when its SSH Host names none: the operator's configured choice, otherwise their local login name.
+_Avoid_: fallback user, remote user
+
 **Target**:
 A machine a run without an Explicit Inventory will act on, identified by the SSH Alias its Playbook Host matched.
 _Avoid_: resolved host, node
