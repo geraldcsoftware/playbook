@@ -27,7 +27,7 @@ type menuItem struct {
 type Model struct {
 	playbook      playbook.Playbook
 	resolvedHosts []ssh.ResolvedHost
-	resolveErrors []string
+	failures      []ssh.HostResolutionFailure
 	inventory     string
 	menuItems     []menuItem
 	cursor        int
@@ -35,9 +35,13 @@ type Model struct {
 }
 
 // NewModel builds the screen for pb. A non-empty explicitInventory names the
-// Explicit Inventory the run will use, in place of resolved hosts.
-func NewModel(pb playbook.Playbook, hosts []ssh.ResolvedHost, errors []string, explicitInventory string) Model {
-	items := []menuItem{{"Run playbook", ActionRun}}
+// Explicit Inventory the run will use, in place of resolved hosts. Run is not
+// offered while any Host Resolution failure exists.
+func NewModel(pb playbook.Playbook, hosts []ssh.ResolvedHost, failures []ssh.HostResolutionFailure, explicitInventory string) Model {
+	var items []menuItem
+	if len(failures) == 0 {
+		items = append(items, menuItem{"Run playbook", ActionRun})
+	}
 	if explicitInventory == "" {
 		items = append(items, menuItem{"View hosts", ActionViewHosts})
 	}
@@ -46,7 +50,7 @@ func NewModel(pb playbook.Playbook, hosts []ssh.ResolvedHost, errors []string, e
 	return Model{
 		playbook:      pb,
 		resolvedHosts: hosts,
-		resolveErrors: errors,
+		failures:      failures,
 		inventory:     explicitInventory,
 		menuItems:     items,
 		chosen:        ActionNone,
@@ -105,8 +109,11 @@ func (m Model) View() string {
 			s += labelStyle.Render("             ") + valueStyle.Render(h.Hostname) + "\n"
 		}
 	}
-	for _, e := range m.resolveErrors {
-		s += "  " + errorStyle.Render("! "+e) + "\n"
+	for _, f := range m.failures {
+		s += "  " + errorStyle.Render("! "+f.PlaybookHost+": "+f.Error()) + "\n"
+	}
+	if len(m.failures) > 0 {
+		s += "  " + errorStyle.Render("Run unavailable until every Playbook Host resolves") + "\n"
 	}
 
 	s += "\n"
@@ -127,8 +134,8 @@ func (m Model) View() string {
 	return s
 }
 
-func Run(pb playbook.Playbook, hosts []ssh.ResolvedHost, errors []string, explicitInventory string) (Action, error) {
-	m := NewModel(pb, hosts, errors, explicitInventory)
+func Run(pb playbook.Playbook, hosts []ssh.ResolvedHost, failures []ssh.HostResolutionFailure, explicitInventory string) (Action, error) {
+	m := NewModel(pb, hosts, failures, explicitInventory)
 	p := tea.NewProgram(m)
 	finalModel, err := p.Run()
 	if err != nil {

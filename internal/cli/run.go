@@ -116,20 +116,21 @@ func runPlaybook(playbookFile string, extraArgs []string, timeout time.Duration)
 	if explicitInventory != "" {
 		fmt.Printf("\033[2m\033[90m│\033[0m  Skipped: Explicit Inventory %s supplies the hosts\n", explicitInventory)
 	} else {
-		sshHosts, err := ssh.ParseConfig(sshConfigPath())
+		targets, failures, err := resolveHosts(pb, cfg)
 		if err != nil {
-			return fmt.Errorf("parsing SSH config: %w", err)
+			return err
 		}
+		allResolved = targets
 
-		for _, hostAlias := range pb.Hosts {
-			resolved, err := ssh.Resolve(hostAlias, sshHosts, cfg.EffectiveDefaultUser())
-			if err != nil {
-				return fmt.Errorf("resolving host '%s': %w", hostAlias, err)
-			}
-			allResolved = append(allResolved, resolved...)
-			for _, r := range resolved {
-				fmt.Printf("\033[2m\033[90m│\033[0m  %s → %s\n", hostAlias, r.Hostname)
-			}
+		for _, r := range targets {
+			fmt.Printf("\033[2m\033[90m│\033[0m  %s → %s\n", r.Alias, r.Hostname)
+		}
+		for _, f := range failures {
+			fmt.Printf("\033[2m\033[90m│\033[0m  %s — \033[31m✗\033[0m %s\n", f.PlaybookHost, f.Error())
+		}
+		if len(failures) > 0 {
+			fmt.Println("\033[31m■\033[0m  \033[31mHost Resolution failed\033[0m")
+			return fmt.Errorf("Host Resolution failed for %d Playbook Host(s)", len(failures))
 		}
 		fmt.Printf("\033[2m\033[90m│\033[0m  \033[97m%d host(s) resolved\033[0m \033[32m✓\033[0m\n", len(allResolved))
 	}

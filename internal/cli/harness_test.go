@@ -154,6 +154,18 @@ func (h *harness) SSHCalls() []string {
 	return h.readLines(path)
 }
 
+// AACCalls returns one entry per aac invocation, each its space-joined argv
+// (excluding argv[0]). It is empty when the credential provider was never
+// asked for a secret.
+func (h *harness) AACCalls() []string {
+	h.t.Helper()
+	path := filepath.Join(h.LogDir, "aac-calls")
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		return nil
+	}
+	return h.readLines(path)
+}
+
 func (h *harness) installFakes() {
 	h.t.Helper()
 

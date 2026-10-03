@@ -158,21 +158,20 @@ func newHostsResolveCmd() *cobra.Command {
 				return nil
 			}
 
-			sshHosts, err := ssh.ParseConfig(sshConfigPath())
+			targets, failures, err := resolveHosts(pb, cfg)
 			if err != nil {
 				return err
 			}
 
-			for _, hostAlias := range pb.Hosts {
-				resolved, err := ssh.Resolve(hostAlias, sshHosts, cfg.EffectiveDefaultUser())
-				if err != nil {
-					fmt.Printf("  ✗ %s — %v\n", hostAlias, err)
-					continue
-				}
-				for _, r := range resolved {
-					fmt.Printf("  ✓ %s → %s (user: %s, key: %s, port: %d)\n",
-						hostAlias, r.Hostname, r.User, r.IdentityFile, r.Port)
-				}
+			for _, r := range targets {
+				fmt.Printf("  ✓ %s → %s (user: %s, key: %s, port: %d)\n",
+					r.Alias, r.Hostname, r.User, r.IdentityFile, r.Port)
+			}
+			for _, f := range failures {
+				fmt.Printf("  ✗ %s — %v\n", f.PlaybookHost, f)
+			}
+			if len(failures) > 0 {
+				return fmt.Errorf("Host Resolution failed for %d Playbook Host(s)", len(failures))
 			}
 			return nil
 		},

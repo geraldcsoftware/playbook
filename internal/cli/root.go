@@ -39,26 +39,21 @@ func newRootCmd() *cobra.Command {
 			}
 
 			var resolved []ssh.ResolvedHost
-			var resolveErrors []string
+			var failures []ssh.HostResolutionFailure
 			if explicitInventory == "" {
-				sshHosts, err := ssh.ParseConfig(sshConfigPath())
+				resolved, failures, err = resolveHosts(pb, cfg)
 				if err != nil {
-					return fmt.Errorf("parsing SSH config: %w", err)
-				}
-
-				for _, hostAlias := range pb.Hosts {
-					r, err := ssh.Resolve(hostAlias, sshHosts, cfg.EffectiveDefaultUser())
-					if err != nil {
-						resolveErrors = append(resolveErrors, fmt.Sprintf("%s: %v", hostAlias, err))
-						continue
-					}
-					resolved = append(resolved, r...)
+					return err
 				}
 			}
 
-			action, err := tui.Run(pb, resolved, resolveErrors, explicitInventory)
+			action, err := tui.Run(pb, resolved, failures, explicitInventory)
 			if err != nil {
 				return err
+			}
+
+			if action == tui.ActionRun && len(failures) > 0 {
+				return fmt.Errorf("Host Resolution failed for %d Playbook Host(s) — the playbook cannot be run", len(failures))
 			}
 
 			switch action {
@@ -70,6 +65,9 @@ func newRootCmd() *cobra.Command {
 				for _, r := range resolved {
 					fmt.Printf("  %s -> %s (user: %s, key: %s, port: %d)\n",
 						r.Alias, r.Hostname, r.User, r.IdentityFile, r.Port)
+				}
+				for _, f := range failures {
+					fmt.Printf("  %s -> %v\n", f.PlaybookHost, f)
 				}
 			case tui.ActionQuit:
 				// nothing

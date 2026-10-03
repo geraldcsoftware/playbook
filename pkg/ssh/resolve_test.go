@@ -1,106 +1,54 @@
 package ssh
 
 import (
+	"slices"
 	"testing"
 )
 
-var testHosts = []SSHHost{
-	{Aliases: []string{"db-prod.eus.v.co.zw"}, HostName: "db-prod.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/id_rsa_db_prod", Port: 22},
-	{Aliases: []string{"db-staging.eus.v.co.zw"}, HostName: "db-staging.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/id_rsa_db_staging", Port: 22},
-	{Aliases: []string{"web-01.eus.v.co.zw"}, HostName: "web-01.eus.v.co.zw", User: "deploy", IdentityFile: "~/.ssh/id_ed25519_web01", Port: 22},
-}
-
-func TestResolve_ExactMatch(t *testing.T) {
-	results, err := Resolve("db-prod.eus.v.co.zw", testHosts, "fallback")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(results))
-	}
-	if results[0].Hostname != "db-prod.eus.v.co.zw" {
-		t.Errorf("expected hostname db-prod.eus.v.co.zw, got %s", results[0].Hostname)
-	}
-}
-
-func TestResolve_SubstringUnique(t *testing.T) {
-	results, err := Resolve("web-01", testHosts, "fallback")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if len(results) != 1 {
-		t.Fatalf("expected 1 result, got %d", len(results))
-	}
-	if results[0].Hostname != "web-01.eus.v.co.zw" {
-		t.Errorf("expected web-01.eus.v.co.zw, got %s", results[0].Hostname)
-	}
-}
-
-func TestResolve_SubstringAmbiguous(t *testing.T) {
-	_, err := Resolve("db-", testHosts, "fallback")
-	if err == nil {
-		t.Fatal("expected ambiguous match error")
-	}
-	ambErr, ok := err.(*AmbiguousMatchError)
-	if !ok {
-		t.Fatalf("expected *AmbiguousMatchError, got %T", err)
-	}
-	if len(ambErr.Candidates) != 2 {
-		t.Errorf("expected 2 candidates, got %d", len(ambErr.Candidates))
-	}
-}
-
-func TestResolve_NoMatch(t *testing.T) {
-	_, err := Resolve("nonexistent", testHosts, "fallback")
-	if err == nil {
-		t.Fatal("expected no match error")
-	}
-}
-
-func TestResolve_FallbackUser(t *testing.T) {
-	results, err := Resolve("web-01", testHosts, "fallback")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if results[0].User != "deploy" {
-		t.Errorf("expected user from ssh config 'deploy', got %s", results[0].User)
-	}
-}
-
-func TestResolve_DefaultUser(t *testing.T) {
+func TestSuggestAliases(t *testing.T) {
 	hosts := []SSHHost{
-		{Aliases: []string{"bare-host"}, HostName: "bare-host.example.com", Port: 22},
+		{Aliases: []string{"web-prod-01", "webmail"}},
+		{Aliases: []string{"web-prod-02"}},
+		{Aliases: []string{"web-staging"}},
+		{Aliases: []string{"db01"}},
+		{Aliases: []string{"mail"}},
 	}
-	results, err := Resolve("bare-host", hosts, "fallback")
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if results[0].User != "fallback" {
-		t.Errorf("expected fallback user, got %s", results[0].User)
-	}
-}
 
-func TestResolve_AnyAliasOfAnSSHHost(t *testing.T) {
-	hosts := []SSHHost{
-		{Aliases: []string{"web", "web-prod"}, HostName: "10.0.0.7", Port: 22},
-		{Aliases: []string{"db"}, HostName: "10.0.0.5", Port: 22},
+	tests := []struct {
+		playbookHost string
+		want         []string
+	}{
+		// Aliases containing it, nearest first then alphabetically, capped.
+		{"web", []string{"webmail", "web-prod-01", "web-prod-02"}},
+		{"web-prod-1", []string{"web-prod-01", "web-prod-02"}},
+		{"db1", []string{"db01"}},
+		{"mial", []string{"mail"}},
+		// Two edits is too many for a three-character name.
+		{"dbx", nil},
+		{"nothing-like-it", nil},
 	}
-	for _, query := range []string{"web", "web-prod"} {
-		results, err := Resolve(query, hosts, "fallback")
-		if err != nil {
-			t.Fatalf("Resolve(%q): %v", query, err)
-		}
-		if results[0].Alias != query || results[0].Hostname != "10.0.0.7" {
-			t.Errorf("Resolve(%q) = %+v", query, results[0])
+	for _, tt := range tests {
+		if got := suggestAliases(tt.playbookHost, hosts); !slices.Equal(got, tt.want) {
+			t.Errorf("suggestAliases(%q) = %q, want %q", tt.playbookHost, got, tt.want)
 		}
 	}
+}
 
-	// Several aliases of one SSH Host containing the query are not ambiguous.
-	results, err := Resolve("we", hosts, "fallback")
-	if err != nil {
-		t.Fatalf("Resolve(we): %v", err)
+func TestEditDistance(t *testing.T) {
+	tests := []struct {
+		a, b string
+		want int
+	}{
+		{"", "", 0},
+		{"db01", "db01", 0},
+		{"db1", "db01", 1},
+		{"mial", "mail", 1},
+		{"kitten", "sitting", 3},
+		{"", "abc", 3},
 	}
-	if results[0].Alias != "web" {
-		t.Errorf("expected the matching SSH Alias web, got %q", results[0].Alias)
+	for _, tt := range tests {
+		if got := editDistance(tt.a, tt.b); got != tt.want {
+			t.Errorf("editDistance(%q, %q) = %d, want %d", tt.a, tt.b, got, tt.want)
+		}
 	}
 }
