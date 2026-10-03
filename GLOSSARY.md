@@ -16,14 +16,18 @@ _Avoid_: SSH config entry, server
 One of the names on an SSH Host's `Host` line; an SSH Host may have several.
 _Avoid_: alias (unqualified), hostname
 
+**Host Resolution**:
+Matching each Playbook Host of every play declared in the playbook to exactly one SSH Alias, to produce the Targets of a run that has no Explicit Inventory.
+_Avoid_: host lookup, host matching
+
 **Target**:
-A machine the run will act on, as determined by resolving the Playbook Hosts of every play.
+A machine a run without an Explicit Inventory will act on, identified by the SSH Alias its Playbook Host matched.
 _Avoid_: resolved host, node
 
 ## Inventory
 
 **Explicit Inventory**:
-An Ansible inventory the operator supplies for a run; it always takes precedence over a Generated Inventory.
+An Ansible inventory the operator supplies for a run; when present it is the sole source of hosts and connection settings, and no Host Resolution takes place.
 _Avoid_: user inventory, custom inventory
 
 **Generated Inventory**:
